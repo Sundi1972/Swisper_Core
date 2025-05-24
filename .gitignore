@@ -1,0 +1,34 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+
+# Environment variables
+.env
+
+# Node + Frontend
+node_modules/
+frontend/dist/
+playwright-report/
+.vite/
+.nyc_output/
+
+# VS Code / OS files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs & Temp
+*.log
+tmp/
+*.bak
+*.dat
+*.dir
+final_contract.json
+swisper_sessions.*
+
+# Coverage / test outputs
+.coverage
+htmlcov/
