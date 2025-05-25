@@ -1,0 +1,40 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.db
+
+# Virtual environment
+.venv/
+
+# Node + frontend build junk
+node_modules/
+frontend/node_modules/
+frontend/dist/
+playwright-report/
+.vite/
+.nyc_output/
+
+# Logs, cache, temp
+*.log
+tmp/
+*.bak
+*.dat
+*.dir
+*.pid
+*.coverage
+final_contract.json
+swisper_sessions.*
+
+# Git & project config
+.git/
+.gitignore
+
+# IDE / system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary test folders
+test-context/

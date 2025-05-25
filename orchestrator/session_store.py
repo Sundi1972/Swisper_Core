@@ -1,10 +1,14 @@
+import os
 import shelve
 import atexit
 import logging
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
-DB_PATH = "orchestrator_sessions.db" # Consider making this path absolute or configurable
+
+# Ensure the shelve data folder exists
+os.makedirs("db_data", exist_ok=True)
+DB_PATH = "db_data/orchestrator_sessions"  # Don't include .db extension — shelve adds it
 
 try:
     sessions = shelve.open(DB_PATH, writeback=True)
@@ -12,9 +16,7 @@ try:
     logger.info(f"Session store initialized at {DB_PATH}")
 except Exception as e:
     logger.error(f"Failed to initialize session store at {DB_PATH}: {e}", exc_info=True)
-    # Fallback to in-memory dict if shelve fails, though this means no persistence.
-    # For a production system, this should be handled more robustly (e.g., fail startup).
-    sessions = {} 
+    sessions = {}  # fallback
 
 # REMOVED: get_contract_engine and its import of ContractStateMachine
 
