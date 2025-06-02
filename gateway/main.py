@@ -184,3 +184,61 @@ async def call_tool(tool_name: str, body: ToolCallParams):
     except Exception as e:
         logger.error("An unexpected error occurred while calling tool %s: %s", tool_name, e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error executing tool {tool_name}: {str(e)}") from e
+
+@app.get("/contracts/current/{session_id}")
+async def get_current_contract(session_id: str) -> Dict[str, Any]:
+    logger.info("Received request for GET /contracts/current/%s", session_id)
+    try:
+        from orchestrator.session_store import get_contract_fsm, get_pending_confirmation
+        import yaml
+        
+        contract_fsm = get_contract_fsm(session_id)
+        pending_product = get_pending_confirmation(session_id)
+        
+        # Check if we have either a stored FSM or a pending confirmation
+        if not contract_fsm and not pending_product:
+            return {
+                "has_contract": False,
+                "contract_data": None,
+                "message": "No active contract for this session"
+            }
+        
+        if contract_fsm:
+            contract_data = {
+                "template_path": getattr(contract_fsm, 'template_path', None),
+                "current_state": getattr(contract_fsm, 'state', None),
+                "parameters": getattr(contract_fsm, 'parameters', {}),
+                "search_results": getattr(contract_fsm, 'search_results', []),
+                "selected_product": getattr(contract_fsm, 'selected_product_for_confirmation', None),
+                "template_content": {}
+            }
+        else:
+            contract_data = {
+                "template_path": "contract_templates/purchase_item.yaml",
+                "current_state": "confirm_order",
+                "parameters": {
+                    "session_id": session_id,
+                    "product": pending_product.get("name", "Unknown product")
+                },
+                "search_results": [],
+                "selected_product": pending_product,
+                "template_content": {}
+            }
+        
+        if contract_data["template_path"] and os.path.exists(contract_data["template_path"]):
+            try:
+                with open(contract_data["template_path"], 'r', encoding='utf-8') as f:
+                    contract_data["template_content"] = yaml.safe_load(f)
+            except Exception as e:
+                logger.warning("Could not load template content from %s: %s", contract_data["template_path"], e)
+                contract_data["template_content"] = {"error": f"Could not load template: {str(e)}"}
+        
+        return {
+            "has_contract": True,
+            "contract_data": contract_data,
+            "message": "Active contract found"
+        }
+        
+    except Exception as e:
+        logger.error("Error retrieving contract for session %s: %s", session_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error retrieving contract: {str(e)}") from e
