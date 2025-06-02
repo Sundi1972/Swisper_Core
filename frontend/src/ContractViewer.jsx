@@ -44,12 +44,6 @@ export default function ContractViewer() {
     }
   }, [sessionId]);
 
-  useEffect(() => {
-    if (!sessionId) return;
-    
-    const interval = setInterval(fetchContractData, 2000);
-    return () => clearInterval(interval);
-  }, [sessionId]);
 
   const JsonDisplay = ({ data }) => {
     const jsonString = JSON.stringify(data, null, 2);
@@ -103,10 +97,13 @@ export default function ContractViewer() {
     <div className="max-w-xl mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-800">Current Contract</h2>
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-sm text-gray-600">Auto-refreshing</span>
-        </div>
+        <button
+          onClick={fetchContractData}
+          disabled={loading}
+          className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
       </div>
       
       <div className="bg-white border border-gray-200 rounded-lg">

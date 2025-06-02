@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 
-export default function SwisperChat() {
+const SwisperChat = forwardRef((props, ref) => {
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Hi, how can I help you today?" }
   ]);
@@ -17,6 +17,26 @@ export default function SwisperChat() {
     }
     setSessionId(sid);
   }, []);
+
+  useEffect(() => {
+    if (sessionId) {
+      const savedMessages = localStorage.getItem(`chat_history_${sessionId}`);
+      if (savedMessages) {
+        try {
+          const parsedMessages = JSON.parse(savedMessages);
+          setMessages(parsedMessages);
+        } catch (e) {
+          console.error('Failed to parse saved messages:', e);
+        }
+      }
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (sessionId && messages.length > 1) {
+      localStorage.setItem(`chat_history_${sessionId}`, JSON.stringify(messages));
+    }
+  }, [messages, sessionId]);
 
   const handleSend = async () => {
     if (!input.trim() || !sessionId) return;
@@ -48,6 +68,15 @@ export default function SwisperChat() {
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") handleSend();
+  };
+
+  const handleNewSession = () => {
+    const newSessionId = crypto.randomUUID();
+    localStorage.setItem("swisper_session_id", newSessionId);
+    setSessionId(newSessionId);
+    
+    setMessages([{ role: "assistant", content: "Hi, how can I help you today?" }]);
+    setInput("");
   };
 
   const handleAskDocs = async () => {
@@ -117,6 +146,14 @@ export default function SwisperChat() {
           Send
         </button>
         <button
+          onClick={handleNewSession}
+          disabled={loading}
+          className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700"
+          title="Start a new session"
+        >
+          New Session
+        </button>
+        <button
           onClick={handleAskDocs}
           disabled={loading}
           className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
@@ -127,4 +164,8 @@ export default function SwisperChat() {
       </div>
     </div>
   );
-}
+});
+
+SwisperChat.displayName = 'SwisperChat';
+
+export default SwisperChat;

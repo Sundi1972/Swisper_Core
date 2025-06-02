@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import SwisperChat from './SwisperChat';
 import ContractViewer from './ContractViewer';
 
 function App() {
   const [activeTab, setActiveTab] = useState('chat');
+  const chatRef = useRef();
 
   return (
     <main className="min-h-screen bg-white text-black p-6">
@@ -34,7 +35,7 @@ function App() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'chat' && <SwisperChat />}
+      {activeTab === 'chat' && <SwisperChat ref={chatRef} />}
       {activeTab === 'contracts' && <ContractViewer />}
     </main>
   );
