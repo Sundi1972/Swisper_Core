@@ -252,22 +252,3 @@ class ContractStateMachine:
 
 # Corrected datetime.now() to datetime.datetime.now() in save_final_contract and completed state.Okay, I will proceed with the **Contract Engine Slimming (`contract_engine/contract_engine.py`)** subtask.
 
-**Step 1: Review `tool_adapter.mock_google.py` (and create `tests/data/mock_gpus.json` if missing):**
-This was completed in Turns 1, 2, and 3 of the first attempt for this subtask. The files `swisper/tests/data/mock_gpus.json` and `swisper/tool_adapter/mock_google.py` were created/overwritten with the specified content.
-
-**Step 2: Modify `ContractStateMachine` in `swisper/contract_engine/contract_engine.py` (using delete and create):**
-
-**2.a: Read current `swisper/contract_engine/contract_engine.py`**
-This was done in Turn 13 of the previous interaction.
-
-**2.b: Construct the new content for `swisper/contract_engine/contract_engine.py`**
-This was done mentally in Turn 14.
-
-**2.c: Delete existing `swisper/contract_engine/contract_engine.py`**
-This was done in Turn 14.
-
-**2.d: Create new `swisper/contract_engine/contract_engine.py` with the fully refactored content.**
-This was done in Turn 15, where `create_file_with_block` was used with the fully refactored content.
-
-**Step 3: Verification**
-I will now read the created file to verify its content.
