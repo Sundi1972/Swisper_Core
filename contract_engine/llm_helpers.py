@@ -21,6 +21,97 @@ client = OpenAI(
     project=project_id
 )
 
+def extract_initial_criteria(user_prompt: str) -> dict:
+    """Extract product criteria and specifications from initial user prompt"""
+    prompt = (
+        "You are an expert at parsing product purchase requests to extract specific criteria and specifications.\n\n"
+        "User prompt:\n"
+        f"{user_prompt}\n\n"
+        "Please extract and return a JSON object with the following structure:\n"
+        "{\n"
+        '  "base_product": "the main product type (e.g., graphics card, laptop, smartphone)",\n'
+        '  "specifications": {\n'
+        '    "chip_model": "specific chip/processor model if mentioned",\n'
+        '    "memory": "memory/RAM specifications if mentioned",\n'
+        '    "storage": "storage specifications if mentioned",\n'
+        '    "brand": "specific brand if mentioned",\n'
+        '    "price_limit": "price constraints if mentioned",\n'
+        '    "other": "any other specific technical requirements"\n'
+        '  },\n'
+        '  "search_keywords": ["list", "of", "key", "search", "terms"],\n'
+        '  "enhanced_query": "optimized search query combining product type and key specifications"\n'
+        "}\n\n"
+        "Examples:\n"
+        "- 'graphics card with RTX 4070 chip and min 12GB RAM' → chip_model: 'RTX 4070', memory: '12GB'\n"
+        "- 'gaming laptop under 2000 CHF with 16GB RAM' → memory: '16GB', price_limit: 'under 2000 CHF'\n"
+        "- 'iPhone 15 Pro with 256GB storage' → brand: 'iPhone', storage: '256GB'\n\n"
+        "Return only valid JSON. Do not include markdown or explanations."
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
+        )
+
+        raw_output = response.choices[0].message.content.strip()
+        print("📎 Criteria extraction output:\n", raw_output)
+
+        # Strip markdown code block formatting if present
+        if raw_output.startswith("```"):
+            raw_output = re.sub(r"^```(?:json)?\s*", "", raw_output)
+            raw_output = re.sub(r"\s*```$", "", raw_output)
+
+        return json.loads(raw_output)
+
+    except Exception as e:
+        print("❌ Failed to extract criteria:", str(e))
+        return _fallback_criteria_extraction(user_prompt)
+
+def _fallback_criteria_extraction(user_prompt: str) -> dict:
+    """Fallback criteria extraction using regex patterns"""
+    base_product = "product"
+    specifications = {}
+    search_keywords = []
+    
+    product_patterns = {
+        r'\b(graphics?\s*cards?|gpu)\b': 'graphics card',
+        r'\b(laptops?|notebooks?)\b': 'laptop',
+        r'\b(smartphones?|phones?|iphones?)\b': 'smartphone',
+        r'\b(washing\s*machines?)\b': 'washing machine',
+        r'\b(processors?|cpus?)\b': 'processor'
+    }
+    
+    for pattern, product_type in product_patterns.items():
+        if re.search(pattern, user_prompt, re.IGNORECASE):
+            base_product = product_type
+            break
+    
+    spec_patterns = {
+        'chip_model': r'\b(rtx\s*\d+|gtx\s*\d+|rx\s*\d+|intel\s*\w+|amd\s*\w+)\b',
+        'memory': r'\b(\d+\s*gb\s*ram|\d+gb\s*memory|\d+\s*gb)\b',
+        'storage': r'\b(\d+\s*gb\s*storage|\d+\s*tb|\d+gb\s*ssd)\b',
+        'price_limit': r'\b(under\s*\d+|below\s*\d+|max\s*\d+|\d+\s*chf)\b'
+    }
+    
+    for spec_key, pattern in spec_patterns.items():
+        match = re.search(pattern, user_prompt, re.IGNORECASE)
+        if match:
+            specifications[spec_key] = match.group(1)
+            search_keywords.append(match.group(1))
+    
+    enhanced_query = base_product
+    if search_keywords:
+        enhanced_query += " " + " ".join(search_keywords)
+    
+    return {
+        "base_product": base_product,
+        "specifications": specifications,
+        "search_keywords": search_keywords,
+        "enhanced_query": enhanced_query
+    }
+
 def analyze_product_differences(product_list: list) -> str:
     prompt = (
         "Analyze the following product search results and summarize key differences in terms "

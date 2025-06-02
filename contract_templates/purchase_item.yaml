@@ -12,6 +12,9 @@ parameters:
   constraints: {}
   product_threshold: 10
   extracted_attributes: []
+  initial_criteria: {}
+  parsed_specifications: {}
+  enhanced_query: null
 
 constraints:
   must_confirm_with_user: true
