@@ -1,7 +1,7 @@
 import pytest
 from unittest import mock
 import datetime
-from swisper.prompt_preprocessor import clean_and_tag # Assuming swisper is in PYTHONPATH for tests
+from prompt_preprocessor import clean_and_tag
 
 # Helper to check ISO format (basic check)
 def is_iso_format(timestamp_str):
@@ -16,7 +16,7 @@ def mock_datetime_now():
     # Fixed timestamp for testing
     fixed_now = datetime.datetime(2024, 1, 1, 12, 0, 0)
     # Patching datetime.datetime within the swisper.prompt_preprocessor module
-    with mock.patch('swisper.prompt_preprocessor.datetime.datetime') as mock_dt_datetime:
+    with mock.patch('prompt_preprocessor.datetime.datetime') as mock_dt_datetime:
         mock_dt_datetime.now.return_value = fixed_now
         yield fixed_now.isoformat()
 
@@ -24,7 +24,7 @@ def mock_datetime_now():
 @pytest.fixture
 def mock_langdetect():
     # Mock langdetect.detect within the swisper.prompt_preprocessor module
-    with mock.patch('swisper.prompt_preprocessor.detect') as mock_detect:
+    with mock.patch('prompt_preprocessor.detect') as mock_detect:
         # Default mock behavior, can be overridden in tests
         mock_detect.return_value = 'en'
         yield mock_detect

@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 # For local testing, if swisper/ is the CWD, then:
 # from contract_engine.haystack_components import ... might work if PYTHONPATH includes '.'
 # However, for consistency with how modules are usually structured & imported:
-from swisper.contract_engine.haystack_components import (
+from contract_engine.haystack_components import (
     MockGoogleShoppingComponent,
     SimplePythonRankingComponent,
     ProductSelectorComponent
@@ -45,7 +45,7 @@ class TestMockGoogleShoppingComponent:
     # The path to patch should be where 'search_fn' is looked up by the component.
     # If haystack_components.py has 'from tool_adapter.mock_google import mock_google_shopping as search_fn',
     # then 'search_fn' is now part of the 'haystack_components' module's namespace.
-    @patch('swisper.contract_engine.haystack_components.search_fn') 
+    @patch('contract_engine.haystack_components.search_fn') 
     def test_run_success(self, mock_search, mock_search_results):
         mock_search.return_value = mock_search_results
         component = MockGoogleShoppingComponent()
@@ -56,7 +56,7 @@ class TestMockGoogleShoppingComponent:
         assert edge == "output_1"
         assert output["products"] == mock_search_results
 
-    @patch('swisper.contract_engine.haystack_components.search_fn')
+    @patch('contract_engine.haystack_components.search_fn')
     def test_run_search_error_response(self, mock_search):
         # Test when the search_fn itself returns a list containing an error dict
         mock_search.return_value = [{"error": "API limit reached"}]
@@ -66,7 +66,7 @@ class TestMockGoogleShoppingComponent:
         # it will log a warning and set output = {"products": []}
         assert output["products"] == [] 
 
-    @patch('swisper.contract_engine.haystack_components.search_fn')
+    @patch('contract_engine.haystack_components.search_fn')
     def test_run_search_exception(self, mock_search):
         mock_search.side_effect = Exception("Network error")
         component = MockGoogleShoppingComponent()
