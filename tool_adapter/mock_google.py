@@ -11,20 +11,20 @@ MOCK_DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'tests', 'data', 
 
 
 def mock_google_shopping(q: str) -> List[Dict[str, Any]]:
-    logger.info(f"Mock Google Shopping called with query: {q}")
+    logger.info("Mock Google Shopping called with query: %s", q)
     try:
         absolute_mock_data_path = os.path.abspath(MOCK_DATA_PATH)
-        logger.debug(f"Attempting to load mock GPU data from: {absolute_mock_data_path}")
+        logger.debug("Attempting to load mock GPU data from: %s", absolute_mock_data_path)
 
         if not os.path.exists(absolute_mock_data_path):
-            logger.error(f"Mock data file not found at {absolute_mock_data_path}. Query: '{q}'")
+            logger.error("Mock data file not found at %s. Query: '%s'", absolute_mock_data_path, q)
             # Try an alternative common path if running from swisper root (e.g. if CWD is swisper/)
             alt_path = os.path.join("tests", "data", "mock_gpus.json") 
             if os.path.exists(alt_path):
                 absolute_mock_data_path = alt_path
-                logger.info(f"Found mock data at alternative relative path: {alt_path}")
+                logger.info("Found mock data at alternative relative path: %s", alt_path)
             else:
-                 logger.error(f"Alternative mock data file not found at {alt_path} either.")
+                 logger.error("Alternative mock data file not found at %s either.", alt_path)
                  return [{"error": "Mock data file not found.", "query": q}]
 
         with open(absolute_mock_data_path, 'r') as f:
@@ -38,24 +38,24 @@ def mock_google_shopping(q: str) -> List[Dict[str, Any]]:
         ]
         
         if not filtered_products and q: # If query doesn't match anything and query was not empty
-            logger.warning(f"No direct match for query '{q}' in mock data. Returning first 2 items as fallback.")
+            logger.warning("No direct match for query '%s' in mock data. Returning first 2 items as fallback.", q)
             return all_products[:2] 
         elif not q: # If query is empty, return all products or a subset
              logger.warning("Empty query received. Returning all mock products.")
              return all_products
 
 
-        logger.info(f"Returning {len(filtered_products)} mock products for query: {q}")
+        logger.info("Returning %d mock products for query: %s", len(filtered_products), q)
         return filtered_products
 
     except FileNotFoundError: # This might be redundant if os.path.exists is checked first
-        logger.error(f"Mock data file not found at {MOCK_DATA_PATH} (resolved to {absolute_mock_data_path}). Query: '{q}'")
+        logger.error("Mock data file not found at %s (resolved to %s). Query: '%s'", MOCK_DATA_PATH, absolute_mock_data_path, q)
         return [{"error": "Mock data file not found.", "query": q}]
     except json.JSONDecodeError:
-        logger.error(f"Error decoding JSON from {MOCK_DATA_PATH}. Query: '{q}'")
+        logger.error("Error decoding JSON from %s. Query: '%s'", MOCK_DATA_PATH, q)
         return [{"error": "Error decoding mock data.", "query": q}]
     except Exception as e:
-        logger.error(f"An unexpected error occurred in mock_google_shopping: {e}", exc_info=True)
+        logger.error("An unexpected error occurred in mock_google_shopping: %s", e, exc_info=True)
         return [{"error": f"Unexpected error: {str(e)}", "query": q}]
 
 # Renaming for clarity as per suggestion, though not strictly necessary if mapped directly
@@ -73,16 +73,16 @@ def route(name: str, params: dict):
         # For mock_google_shopping, 'q' is required.
         # This basic check can be expanded or made more generic if needed.
         if name == "mock_google_shopping" and 'q' not in params:
-            logger.error(f"Query parameter 'q' missing for tool {name}")
+            logger.error("Query parameter 'q' missing for tool %s", name)
             raise TypeError(f"Missing required parameter 'q' for tool {name}") # TypeError for missing args
         
         try:
             return adapter_map[name](**params)
         except TypeError as te: # Catching issues like unexpected keyword arguments if params don't match function signature
-            logger.error(f"TypeError calling tool {name} with params {params}: {te}", exc_info=True)
+            logger.error("TypeError calling tool %s with params %s: %s", name, params, te, exc_info=True)
             # Re-raise as a more specific error or handle as appropriate
             raise TypeError(f"Invalid parameters for tool {name}: {te}")
 
     else:
-        logger.error(f"Unknown tool name in mock_adapter.route: {name}")
+        logger.error("Unknown tool name in mock_adapter.route: %s", name)
         raise ValueError(f"Unknown tool: {name}")

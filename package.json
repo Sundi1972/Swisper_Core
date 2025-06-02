@@ -16,5 +16,8 @@
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.52.0"
+  },
+  "dependencies": {
+    "swisper": "file:"
   }
 }

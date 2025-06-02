@@ -1,6 +1,7 @@
 # swisper/gateway/main.py
 import logging
 import os
+import json # Added import
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Any, Dict # Added Dict here
@@ -19,7 +20,7 @@ except ImportError as e:
     # This helps in diagnosing PYTHONPATH or module availability issues early.
     logging.basicConfig(level="ERROR", format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     logger = logging.getLogger(__name__)
-    logger.error(f"Failed to import project modules. Ensure PYTHONPATH is set correctly. Error: {e}", exc_info=True)
+    logger.error("Failed to import project modules. Ensure PYTHONPATH is set correctly. Error: %s", e, exc_info=True)
     raise
 
 
@@ -63,10 +64,10 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def chat_endpoint(payload: ChatRequest) -> Dict[str, Any]: # Added return type hint
-    logger.info(f"Received /chat request for session_id: {payload.session_id} with {len(payload.messages)} messages.")
+    logger.info("Received /chat request for session_id: %s with %d messages.", payload.session_id, len(payload.messages))
 
     if not payload.messages:
-        logger.warning("Received empty messages list for session_id: {payload.session_id}.")
+        logger.warning("Received empty messages list for session_id: %s.", payload.session_id)
         # Return a JSON response compatible with FastAPI's error handling
         raise HTTPException(status_code=400, detail="No message provided.")
 
@@ -77,22 +78,22 @@ async def chat_endpoint(payload: ChatRequest) -> Dict[str, Any]: # Added return 
     try:
         # Ensure clean_and_tag is not an async function based on its current stub definition
         cleaned_data = clean_and_tag(raw=last_user_message.content, user_id=payload.session_id)
-        logger.info(f"Prompt preprocessor output for session {payload.session_id}: {cleaned_data.get('cleaned_text')}")
+        logger.info("Prompt preprocessor output for session %s: %s", payload.session_id, cleaned_data.get('cleaned_text'))
     except Exception as e:
-        logger.error(f"Error in prompt_preprocessor for session {payload.session_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error processing prompt.")
+        logger.error("Error in prompt_preprocessor for session %s: %s", payload.session_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Error processing prompt.") from e
 
     # 2. Forward to Orchestrator
     try:
         # orchestrator_handle is an async function, so it should be awaited.
         orchestrator_response = await orchestrator_handle(messages=payload.messages, session_id=payload.session_id)
-        logger.info(f"Orchestrator response for session {payload.session_id}: {orchestrator_response.get('reply')}")
+        logger.info("Orchestrator response for session %s: %s", payload.session_id, orchestrator_response.get('reply'))
     except Exception as e:
-        logger.error(f"Error in orchestrator for session {payload.session_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error in orchestrator.")
+        logger.error("Error in orchestrator for session %s: %s", payload.session_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Error in orchestrator.") from e
     
     if not isinstance(orchestrator_response, dict):
-        logger.error(f"Orchestrator returned non-dict response: {orchestrator_response} for session {payload.session_id}")
+        logger.error("Orchestrator returned non-dict response: %s for session %s", orchestrator_response, payload.session_id)
         raise HTTPException(status_code=500, detail="Invalid response format from orchestrator.")
 
     return orchestrator_response
@@ -142,21 +143,19 @@ async def get_tools():
             if os.path.exists(TOOLS_JSON_PATH):
                  path_to_check = TOOLS_JSON_PATH
             else:
-                logger.error(f"Tools file not found. Checked: '{path_to_check}' and '{TOOLS_JSON_PATH}'")
+                logger.error("Tools file not found. Checked: '%s' and '%s'", path_to_check, TOOLS_JSON_PATH)
                 raise FileNotFoundError # Raise to be caught by the except block
 
-        with open(path_to_check, 'r') as f:
+        with open(path_to_check, 'r', encoding='utf-8') as f:
             tools_data = json.load(f)
         return tools_data
-    except FileNotFoundError:
-        logger.error(f"Tools file not found at effective path: '{path_to_check}' (original: '{TOOLS_JSON_PATH}')", exc_info=True)
-        raise HTTPException(status_code=404, detail="Tools definition file not found.")
-    except json.JSONDecodeError:
-        logger.error(f"Error decoding JSON from {path_to_check}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error reading tools definition.")
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Tools definition file not found.") from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail="Error reading tools definition.") from exc
     except Exception as e:
-        logger.error(f"An unexpected error occurred while fetching tools: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error while fetching tools.")
+        logger.error("An unexpected error occurred while fetching tools: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error while fetching tools.") from e
 
 
 # Pydantic model for the /call endpoint's request body
@@ -167,21 +166,21 @@ class ToolCallParams(BaseModel):
 @app.post("/call/{tool_name}")
 async def call_tool(tool_name: str, body: ToolCallParams): 
     params_dict = body.params
-    logger.info(f"Received request for POST /call/{tool_name} with params: {params_dict}")
+    logger.info("Received request for POST /call/%s with params: %s", tool_name, params_dict)
     try:
         result = call_tool_adapter(name=tool_name, params=params_dict)
-        logger.info(f"Tool {tool_name} executed successfully. Result: {result}")
+        logger.info("Tool %s executed successfully. Result: %s", tool_name, result)
         return {"tool_name": tool_name, "result": result}
     except ValueError as ve: 
-        logger.warning(f"Call to unknown tool '{tool_name}' or value error: {ve}", exc_info=True)
+        logger.warning("Call to unknown tool '%s' or value error: %s", tool_name, ve, exc_info=True)
         # Check if it's specifically "Unknown tool" or other ValueError from adapter
         if "Unknown tool" in str(ve):
-             raise HTTPException(status_code=404, detail=str(ve))
+             raise HTTPException(status_code=404, detail=str(ve)) from ve
         else: # Other ValueErrors from tool logic itself
-             raise HTTPException(status_code=400, detail=str(ve))
+             raise HTTPException(status_code=400, detail=str(ve)) from ve
     except TypeError as te: 
-        logger.warning(f"TypeError calling tool '{tool_name}' with params {params_dict}: {te}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"Invalid parameters for tool {tool_name}: {te}")
+        logger.warning("TypeError calling tool '%s' with params %s: %s", tool_name, params_dict, te, exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Invalid parameters for tool {tool_name}: {te}") from te
     except Exception as e:
-        logger.error(f"An unexpected error occurred while calling tool {tool_name}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error executing tool {tool_name}: {str(e)}")
+        logger.error("An unexpected error occurred while calling tool %s: %s", tool_name, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error executing tool {tool_name}: {str(e)}") from e

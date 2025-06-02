@@ -8,6 +8,8 @@ jsonschema
 python-multipart
 langdetect
 emoji
-farm-haystack[all]
+farm-haystack
 pytest
 pytest-asyncio
+# Linters
+pylint

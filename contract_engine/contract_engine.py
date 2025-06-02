@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any, List # Added List
 import os # For makedirs
 
 # Import the mock search function
-from tool_adapter.mock_google import mock_google_shopping as search_product
+from swisper.tool_adapter.mock_google import mock_google_shopping as search_product
 
 # LLM Helper functions are no longer used by the slimmed FSM
 # from engine.llm_helpers import (

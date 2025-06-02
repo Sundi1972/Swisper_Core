@@ -34,7 +34,7 @@ def clean_and_tag(raw: str, user_id="anon") -> dict:
         try:
             detected_language = detect(cleaned_text)
         except LangDetectException:
-            logger.warning(f"Language detection failed for text: '{cleaned_text[:50]}...'. Defaulting to 'und'.")
+            logger.warning("Language detection failed for text: '%s...'. Defaulting to 'und'.", cleaned_text[:50])
             detected_language = "und" # Undetermined
     else:
         detected_language = "und" # No text to detect from
@@ -42,7 +42,7 @@ def clean_and_tag(raw: str, user_id="anon") -> dict:
     # 4. Timestamp
     timestamp = datetime.datetime.now().isoformat()
 
-    logger.info(f"Preprocessed: original='{original_text[:30]}...', cleaned='{cleaned_text[:30]}...', lang='{detected_language}'")
+    logger.info("Preprocessed: original='%s...', cleaned='%s...', lang='%s'", original_text[:30], cleaned_text[:30], detected_language)
 
     return {
         "cleaned_text": cleaned_text,
@@ -68,5 +68,5 @@ if __name__ == '__main__':
     ]
     for text in test_cases:
         result = clean_and_tag(text, user_id="test_user")
-        logger.info(f"Original: '{text}'")
-        logger.info(f"Processed: {result}\n")
+        logger.info("Original: '%s'", text)
+        logger.info("Processed: %s\n", result)
