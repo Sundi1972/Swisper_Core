@@ -112,6 +112,113 @@ def _fallback_criteria_extraction(user_prompt: str) -> dict:
         "enhanced_query": enhanced_query
     }
 
+def is_cancel_request(user_input: str) -> bool:
+    """Check if user input contains cancellation keywords"""
+    cancel_keywords = ["cancel", "exit", "stop", "quit", "abort", "nevermind"]
+    return any(keyword in user_input.lower() for keyword in cancel_keywords)
+
+def is_response_relevant(user_response: str, expected_context: str, product_context: str) -> dict:
+    """
+    Use LLM to determine if user response is relevant to expected context
+    
+    Args:
+        user_response: What the user actually said
+        expected_context: What we were expecting (e.g., "product criteria", "yes/no confirmation")
+        product_context: Current product being discussed (e.g., "graphics card RTX 4070")
+    
+    Returns:
+        {
+            "is_relevant": bool,
+            "confidence": float,
+            "reason": str,
+            "detected_intent": str
+        }
+    """
+    prompt = (
+        "You are an expert at analyzing user responses in the context of product purchase conversations.\n\n"
+        f"CONTEXT: We are discussing purchasing a {product_context}\n"
+        f"EXPECTED RESPONSE TYPE: {expected_context}\n"
+        f"USER'S ACTUAL RESPONSE: {user_response}\n\n"
+        "Please analyze if the user's response is relevant to what we were expecting.\n\n"
+        "Examples of RELEVANT responses:\n"
+        "- When asking for product criteria: 'I need 16GB RAM', 'under 2000 CHF', 'any brand is fine'\n"
+        "- When asking for yes/no confirmation: 'yes', 'no', 'confirm', 'I'm not sure about the price'\n\n"
+        "Examples of IRRELEVANT responses:\n"
+        "- When asking for product criteria: 'Who was Gerhard Schroeder?', 'What's the weather?'\n"
+        "- When asking for yes/no confirmation: 'Tell me about quantum physics', 'I want a different product'\n"
+        "- When discussing graphics cards: 'I want to buy a washing machine instead'\n\n"
+        "Return a JSON object with this structure:\n"
+        "{\n"
+        '  "is_relevant": true/false,\n'
+        '  "confidence": 0.0-1.0,\n'
+        '  "reason": "brief explanation of why relevant or not",\n'
+        '  "detected_intent": "what the user seems to be trying to do"\n'
+        "}\n\n"
+        "Be conservative - if there's any reasonable connection to the product or purchase context, consider it relevant.\n"
+        "Only mark as irrelevant if the response is clearly unrelated to the purchase discussion.\n\n"
+        "Return only valid JSON. Do not include markdown or explanations."
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
+        )
+
+        raw_output = response.choices[0].message.content.strip()
+        print(f"📎 Relevance check output:\n{raw_output}")
+
+        # Strip markdown code block formatting if present
+        if raw_output.startswith("```"):
+            raw_output = re.sub(r"^```(?:json)?\s*", "", raw_output)
+            raw_output = re.sub(r"\s*```$", "", raw_output)
+
+        return json.loads(raw_output)
+
+    except Exception as e:
+        print(f"❌ Failed to check response relevance: {str(e)}")
+        return _fallback_relevance_check(user_response, expected_context, product_context)
+
+def _fallback_relevance_check(user_response: str, expected_context: str, product_context: str) -> dict:
+    """Fallback relevance check using keyword matching"""
+    user_lower = user_response.lower()
+    
+    irrelevant_patterns = [
+        r'\b(who|what|when|where|why)\s+(is|was|are|were)',  # Questions about people/facts
+        r'\b(weather|temperature|climate)\b',  # Weather questions
+        r'\b(politics|politician|president|chancellor)\b',  # Political questions
+        r'\b(quantum|physics|chemistry|biology)\b',  # Science questions
+        r'\b(recipe|cooking|food)\b',  # Cooking questions
+    ]
+    
+    for pattern in irrelevant_patterns:
+        if re.search(pattern, user_lower):
+            return {
+                "is_relevant": False,
+                "confidence": 0.8,
+                "reason": "Response appears to be about unrelated topics",
+                "detected_intent": "asking about unrelated topic"
+            }
+    
+    if "graphics card" in product_context.lower():
+        other_products = ["washing machine", "laptop", "smartphone", "phone", "tablet", "monitor"]
+        for product in other_products:
+            if product in user_lower and "buy" in user_lower:
+                return {
+                    "is_relevant": False,
+                    "confidence": 0.9,
+                    "reason": f"User wants to buy {product} instead of {product_context}",
+                    "detected_intent": f"wants to purchase {product}"
+                }
+    
+    return {
+        "is_relevant": True,
+        "confidence": 0.6,
+        "reason": "No clear irrelevant patterns detected",
+        "detected_intent": "likely relevant to purchase context"
+    }
+
 def analyze_product_differences(product_list: list) -> str:
     prompt = (
         "Analyze the following product search results and summarize key differences in terms "

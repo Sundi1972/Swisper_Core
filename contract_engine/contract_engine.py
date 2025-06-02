@@ -120,7 +120,8 @@ class ContractStateMachine:
             clarification_message = (
                 f"I found {len(self.search_results)} results for '{product_query}'. "
                 f"To help you choose the best option, could you provide more criteria? "
-                f"For example: {attribute_examples}, or any specific requirements you have."
+                f"For example: {attribute_examples}, or any specific requirements you have. "
+                f"Or type 'cancel' to exit this purchase."
             )
             
             self.logger.info(f"FSM (session: {session_id}): Asking for clarification. Transition: ask_clarification → wait_for_preferences")
@@ -132,7 +133,26 @@ class ContractStateMachine:
                 return {"ask_user": "Please provide your preferences to help me filter the products."}
             
             try:
-                from contract_engine.llm_helpers import analyze_user_preferences
+                from contract_engine.llm_helpers import analyze_user_preferences, is_cancel_request, is_response_relevant
+                
+                if is_cancel_request(user_input):
+                    self.state = "cancelled"
+                    return {"ask_user": "Purchase cancelled. Is there anything else I can help you with?"}
+                
+                product_context = self.contract["parameters"].get("product", "product")
+                relevance_check = is_response_relevant(
+                    user_input, 
+                    "product criteria and specifications", 
+                    product_context
+                )
+                
+                if not relevance_check.get("is_relevant", True):
+                    return {
+                        "ask_user": f"I didn't understand your response in the context of finding {product_context}. "
+                                   f"Could you please provide criteria like brand, price range, or features? "
+                                   f"Or type 'cancel' to exit this purchase."
+                    }
+                
                 preferences_data = analyze_user_preferences(user_input, self.search_results)
                 
                 self.contract["parameters"]["preferences"] = preferences_data.get("preferences", [])
@@ -223,21 +243,49 @@ class ContractStateMachine:
 
         elif self.state == "confirm_order":
             self.logger.info(f"FSM (session: {session_id}): In confirm_order, user_input: '{user_input}'")
-            if user_input and user_input.lower() in ["yes", "y", "confirm", "ok", "okay", "proceed", "sure"]:
-                self.contract.setdefault("subtasks", []).append({
-                    "id": "confirm_order",
-                    "type": "confirmation",
-                    "status": "completed",
-                    "response": user_input
-                })
-                self.logger.info(f"FSM (session: {session_id}): Order confirmed by user. Transition: confirm_order → completed")
-                self.state = "completed"
-                return self.next() 
-            elif user_input and user_input.lower() in ["no", "n", "cancel", "stop"]:
-                self.contract["status"] = "cancelled_by_user"
-                self.logger.info(f"FSM (session: {session_id}): Order cancelled by user.")
-                return {"status": "cancelled", "message": "Order cancelled by user."}
-            else:
+            
+            try:
+                from contract_engine.llm_helpers import is_cancel_request, is_response_relevant
+                
+                if is_cancel_request(user_input):
+                    self.contract["status"] = "cancelled_by_user"
+                    self.logger.info(f"FSM (session: {session_id}): Order cancelled by user.")
+                    return {"status": "cancelled", "message": "Purchase cancelled. Is there anything else I can help you with?"}
+                
+                product_name = self.selected_product_for_confirmation.get("name", "the product")
+                product_price = self.selected_product_for_confirmation.get("price", "price not available")
+                product_context = f"{product_name} at {product_price} CHF"
+                
+                relevance_check = is_response_relevant(
+                    user_input, 
+                    "yes/no confirmation for product purchase", 
+                    product_context
+                )
+                
+                if not relevance_check.get("is_relevant", True):
+                    return {
+                        "ask_user": f"I didn't understand your response. Please answer 'yes' to confirm the purchase "
+                                   f"of {product_name} at {product_price} CHF, 'no' to decline, or 'cancel' to exit."
+                    }
+                
+                if user_input and user_input.lower() in ["yes", "y", "confirm", "ok", "okay", "proceed", "sure"]:
+                    self.contract.setdefault("subtasks", []).append({
+                        "id": "confirm_order",
+                        "type": "confirmation",
+                        "status": "completed",
+                        "response": user_input
+                    })
+                    self.logger.info(f"FSM (session: {session_id}): Order confirmed by user. Transition: confirm_order → completed")
+                    self.state = "completed"
+                    return self.next() 
+                elif user_input and user_input.lower() in ["no", "n", "decline", "reject"]:
+                    self.contract["status"] = "cancelled_by_user"
+                    self.logger.info(f"FSM (session: {session_id}): Order declined by user.")
+                    return {"status": "cancelled", "message": "Order cancelled. Is there anything else I can help you with?"}
+                else:
+                    return {"ask_user": f"I didn't understand your response. Please answer 'yes' to confirm the purchase of {product_name} at {product_price} CHF, or 'no' to decline."}
+            except Exception as e:
+                self.logger.error(f"FSM (session: {session_id}): Error in confirm_order: {e}")
                 product_name = self.selected_product_for_confirmation.get('name', 'this product')
                 return {"ask_user": f"Sorry, I didn't understand. Please confirm for {product_name} (yes/no)."}
 
@@ -256,6 +304,11 @@ class ContractStateMachine:
                 self.logger.error(f"FSM (session: {session_id}): Failed to save final contract: {e}", exc_info=True)
             
             return {"status": "completed", "contract": self.contract}
+
+        elif self.state == "cancelled":
+            self.logger.info(f"FSM (session: {session_id}): Contract is in cancelled state.")
+            self.contract["status"] = "cancelled"
+            return {"status": "cancelled", "message": "The purchase has been cancelled. Is there anything else I can help you with?"}
 
         elif self.state == "error": 
             self.logger.error(f"FSM (session: {session_id}): FSM is in an error state, likely due to template loading failure.")

@@ -118,6 +118,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                     set_pending_confirmation(session_id, stored_fsm.selected_product_for_confirmation)
                     # Clear stored FSM since we're moving to confirmation
                     session_store.set_contract_fsm(session_id, None)
+                elif stored_fsm.state in ["cancelled"]:
+                    session_store.set_contract_fsm(session_id, None)
                 else:
                     session_store.set_contract_fsm(session_id, stored_fsm)
             else:
@@ -176,6 +178,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                 # If it's a confirmation question, set pending confirmation
                 if "confirm" in reply_content.lower() and hasattr(fsm, 'selected_product_for_confirmation'):
                     set_pending_confirmation(session_id, fsm.selected_product_for_confirmation)
+                elif fsm.state in ["cancelled"]:
+                    session_store.set_contract_fsm(session_id, None)
                 else:
                     session_store.set_contract_fsm(session_id, fsm)
             else:
