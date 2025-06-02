@@ -43,7 +43,7 @@ def mock_search_results():
 
 class TestMockGoogleShoppingComponent:
     # The path to patch should be where 'search_fn' is looked up by the component.
-    # If haystack_components.py has 'from tool_adapter.mock_google import mock_google_shopping as search_fn',
+    # If haystack_components.py has 'from tool_adapter.mock_google import google_shopping_search as search_fn',
     # then 'search_fn' is now part of the 'haystack_components' module's namespace.
     @patch('contract_engine.haystack_components.search_fn') 
     def test_run_success(self, mock_search, mock_search_results):
@@ -64,7 +64,7 @@ class TestMockGoogleShoppingComponent:
         output, _ = component.run(query="test")
         # Based on component's logic: if isinstance(products, list) and products and isinstance(products[0], dict) and "error" in products[0]:
         # it will log a warning and set output = {"products": []}
-        assert output["products"] == [] 
+        assert output["products"] == []
 
     @patch('contract_engine.haystack_components.search_fn')
     def test_run_search_exception(self, mock_search):

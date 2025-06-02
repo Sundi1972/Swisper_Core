@@ -1,5 +1,6 @@
 import json
 import os
+import requests
 from typing import List, Dict, Any
 import logging
 
@@ -9,6 +10,50 @@ logger = logging.getLogger(__name__)
 # This assumes tool_adapter is one level down from repository root, and tests is also one level down.
 MOCK_DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'tests', 'data', 'mock_gpus.json')
 
+
+def real_google_shopping(q: str) -> List[Dict[str, Any]]:
+    """Real SearchAPI.io Google Shopping integration"""
+    api_key = os.environ.get("SEARCHAPI_API_KEY")
+    if not api_key:
+        logger.warning("SEARCHAPI_API_KEY not found, falling back to mock data")
+        return mock_google_shopping(q)
+    
+    try:
+        url = "https://www.searchapi.io/api/v1/search"
+        params = {
+            "engine": "google_shopping",
+            "q": q,
+            "api_key": api_key,
+            "gl": "ch",
+            "num": 20
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        shopping_results = data.get("shopping_results", [])
+        transformed_results = []
+        
+        for item in shopping_results:
+            transformed_item = {
+                "name": item.get("title", ""),
+                "brand": item.get("seller", ""),
+                "price": item.get("extracted_price", 0),
+                "rating": item.get("rating", 0),
+                "reviews": item.get("reviews", 0),
+                "link": item.get("link", ""),
+                "thumbnail": item.get("thumbnail", "")
+            }
+            transformed_results.append(transformed_item)
+        
+        logger.info(f"SearchAPI returned {len(transformed_results)} products for query: {q}")
+        return transformed_results
+        
+    except Exception as e:
+        logger.error(f"SearchAPI error for query '{q}': {e}", exc_info=True)
+        logger.info("Falling back to mock data")
+        return mock_google_shopping(q)
 
 def mock_google_shopping(q: str) -> List[Dict[str, Any]]:
     logger.info("Mock Google Shopping called with query: %s", q)
@@ -58,21 +103,24 @@ def mock_google_shopping(q: str) -> List[Dict[str, Any]]:
         logger.error("An unexpected error occurred in mock_google_shopping: %s", e, exc_info=True)
         return [{"error": f"Unexpected error: {str(e)}", "query": q}]
 
-# Renaming for clarity as per suggestion, though not strictly necessary if mapped directly
+def google_shopping_search(q: str) -> List[Dict[str, Any]]:
+    """Main search function - uses real API with mock fallback"""
+    return real_google_shopping(q)
+
 def mock_google_shopping_adapter(q: str) -> List[Dict[str, Any]]:
     return mock_google_shopping(q=q)
 
 adapter_map = {
-    "mock_google_shopping": mock_google_shopping_adapter # Mapping to the renamed/clarified adapter
-    # "mock_google_shopping": mock_google_shopping # Could also map directly if no rename
+    "google_shopping": google_shopping_search,
+    "mock_google_shopping": mock_google_shopping_adapter
 }
 
 def route(name: str, params: dict):
     if name in adapter_map:
         # Ensure all required parameters for the specific tool are passed.
-        # For mock_google_shopping, 'q' is required.
+        # For google_shopping and mock_google_shopping, 'q' is required.
         # This basic check can be expanded or made more generic if needed.
-        if name == "mock_google_shopping" and 'q' not in params:
+        if name in ["google_shopping", "mock_google_shopping"] and 'q' not in params:
             logger.error("Query parameter 'q' missing for tool %s", name)
             raise TypeError(f"Missing required parameter 'q' for tool {name}") # TypeError for missing args
         

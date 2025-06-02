@@ -6,8 +6,8 @@ import logging
 from typing import Optional, Dict, Any, List # Added List
 import os # For makedirs
 
-# Import the mock search function
-from tool_adapter.mock_google import mock_google_shopping as search_product
+# Import the real search function (with mock fallback)
+from tool_adapter.mock_google import google_shopping_search as search_product
 
 # LLM Helper functions are no longer used by the slimmed FSM
 # from engine.llm_helpers import (
@@ -72,21 +72,21 @@ class ContractStateMachine:
                 self.contract["status"] = "failed"
                 return {"status": "failed", "message": "No product specified for search."}
 
-            self.logger.info(f"FSM (session: {session_id}): Searching for product: '{product_query}' using mock adapter.")
+            self.logger.info(f"FSM (session: {session_id}): Searching for product: '{product_query}' using SearchAPI.")
             results = search_product(q=product_query) 
 
             self.contract.setdefault("subtasks", []).append({
-                "id": "search_product_mock",
-                "type": "search_mock",
+                "id": "search_product",
+                "type": "search",
                 "status": "completed",
                 "results": results
             })
             self.search_results = results
 
             if not results or (isinstance(results, list) and results and results[0].get("error")):
-                self.logger.warning(f"FSM (session: {session_id}): No products found or error from mock search for '{product_query}'. Results: {results}")
+                self.logger.warning(f"FSM (session: {session_id}): No products found or error from search for '{product_query}'. Results: {results}")
             
-            self.logger.info(f"FSM (session: {session_id}): Found {len(results)} mock products. Transition: search → rank_and_select")
+            self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products. Transition: search → rank_and_select")
             self.state = "rank_and_select"
             return self.next()
 
