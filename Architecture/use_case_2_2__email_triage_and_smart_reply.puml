@@ -1,8 +1,8 @@
 @startuml
 == Use Case 2: Email Triage and Smart Reply ==
 actor User
-participant "Swisper App" as App2
-participant "Swisper Backend" as Backend2
+participant "AI Assistant App" as App2
+participant "AI Assistant Backend" as Backend2
 participant "Prompt Preprocessor" as Pre2
 participant "Outlook Tool" as Outlook
 participant "LLM (GPT-4o)" as LLM2

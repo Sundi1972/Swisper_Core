@@ -1,8 +1,8 @@
 @startuml
 == Use Case 5: Complex Travel Booking ==
 actor User
-participant "Swisper App" as App5
-participant "Swisper Backend" as Backend5
+participant "AI Assistant App" as App5
+participant "AI Assistant Backend" as Backend5
 participant "Prompt Preprocessor" as Pre5
 participant "Contract Engine" as Contract5
 participant "Flights API" as Flights

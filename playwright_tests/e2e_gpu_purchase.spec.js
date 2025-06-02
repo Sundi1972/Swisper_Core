@@ -9,7 +9,7 @@ test.describe('GPU Purchase Flow', () => {
     const sendButtonSelector = 'button:has-text("Send")'; 
     // Assuming each message is a div, and assistant messages might have a specific class or structure
     // For SwisperChat.jsx, each message is: <div key={i} className={`text-sm mb-2 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-    // So, assistant messages are divs with 'text-left' and contain "Swisper:"
+    // So, assistant messages are divs with 'text-left' and contain "Assistant:"
     // A more robust selector might be needed if other 'text-left' divs exist.
     // Let's target the message container and then filter for assistant messages.
     const messageContainerSelector = '.bg-gray-100.rounded-lg'; // The main chat area
@@ -17,19 +17,19 @@ test.describe('GPU Purchase Flow', () => {
     // Helper to get the last assistant message text
     async function getLastAssistantMessageText() {
       const allMessages = await page.locator(`${messageContainerSelector} > div`).allTextContents();
-      const assistantMessages = allMessages.filter(text => text.startsWith("Swisper:"));
+      const assistantMessages = allMessages.filter(text => text.startsWith("Assistant:"));
       return assistantMessages.pop() || ""; // Return last or empty string
     }
 
     // Helper function to send a message and wait for a new assistant response
     async function sendMessageAndWaitForResponse(message) {
-      const initialAssistantMessages = await page.locator(`${messageContainerSelector} > div:has-text("Swisper:")`).count();
+      const initialAssistantMessages = await page.locator(`${messageContainerSelector} > div:has-text("Assistant:")`).count();
       
       await page.fill(chatInputSelector, message);
       await page.click(sendButtonSelector);
       
       // Wait for the number of assistant messages to increase
-      await expect(page.locator(`${messageContainerSelector} > div:has-text("Swisper:")`)).toHaveCount(initialAssistantMessages + 1, { timeout: 20000 }); // Increased timeout for potentially slow backend
+      await expect(page.locator(`${messageContainerSelector} > div:has-text("Assistant:")`)).toHaveCount(initialAssistantMessages + 1, { timeout: 20000 }); // Increased timeout for potentially slow backend
       
       return getLastAssistantMessageText();
     }

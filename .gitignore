@@ -27,7 +27,7 @@ tmp/
 *.dat
 *.dir
 final_contract.json
-swisper_sessions.*
+orchestrator_sessions.*
 
 # Coverage / test outputs
 .coverage

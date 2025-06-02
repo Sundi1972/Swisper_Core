@@ -2,8 +2,8 @@
 
 ' Use Case 1: Web Search for Factual Knowledge
 actor User
-participant "Swisper App" as App
-participant "Swisper Backend" as Backend
+participant "AI Assistant App" as App
+participant "AI Assistant Backend" as Backend
 participant "Prompt Preprocessor" as Pre
 participant "Web Search Tool" as Search
 participant "LLM (GPT-4o)" as LLM

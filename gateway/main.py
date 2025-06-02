@@ -1,4 +1,4 @@
-# swisper/gateway/main.py
+# gateway/main.py
 import logging
 import os
 import json # Added import
@@ -51,7 +51,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Path to tools.json - Assuming WORKDIR is /app (swisper/) for Docker execution
+# Path to tools.json - Assuming WORKDIR is /app (repository root) for Docker execution
 TOOLS_JSON_PATH = "orchestrator/tool_registry/tools.json" 
 
 class Message(BaseModel):
@@ -105,8 +105,8 @@ async def chat_endpoint(payload: ChatRequest) -> Dict[str, Any]: # Added return 
 
 if __name__ == "__main__":
     # This block is for local development/debugging without Docker.
-    # Ensure PYTHONPATH includes the 'swisper' directory root when running this directly.
-    # Example: PYTHONPATH=$PYTHONPATH:$(pwd) python gateway/main.py (if in swisper dir)
+    # Ensure PYTHONPATH includes the repository root when running this directly.
+    # Example: PYTHONPATH=$PYTHONPATH:$(pwd) python gateway/main.py (if in repo root)
     # or set it in your IDE's run configuration.
     logger.info("Starting Uvicorn server for local development...")
     import uvicorn
@@ -119,19 +119,19 @@ if __name__ == "__main__":
 async def get_tools():
     logger.info("Received request for GET /tools")
     try:
-        # Correct path construction assuming this file (main.py) is in swisper/gateway/
-        # and TOOLS_JSON_PATH is relative to swisper/ root.
-        # Docker WORKDIR is /app (which is swisper/), so TOOLS_JSON_PATH should be fine as is.
-        # For local execution: if running from swisper/gateway/, need to adjust.
-        # If running 'python -m gateway.main' from 'swisper/', path is fine.
-        # If running 'python main.py' from 'swisper/gateway', path needs '../'.
+        # Correct path construction assuming this file (main.py) is in gateway/
+        # and TOOLS_JSON_PATH is relative to repository root.
+        # Docker WORKDIR is /app (which is the repo root), so TOOLS_JSON_PATH should be fine as is.
+        # For local execution: if running from gateway/, need to adjust.
+        # If running 'python -m gateway.main' from repo root, path is fine.
+        # If running 'python main.py' from gateway/, path needs '../'.
         # The Docker setup is the primary target, so TOOLS_JSON_PATH = "orchestrator/tool_registry/tools.json" is best.
         
         # Simple check for local dev if path needs adjustment (basic heuristic)
         # This is a bit of a hack for local dev; ideally, path management is more robust.
         current_dir = os.getcwd()
         path_to_check = TOOLS_JSON_PATH
-        if "swisper/gateway" in current_dir.replace("\\", "/"): # If CWD is gateway
+        if "gateway" in current_dir.replace("\\", "/").split("/")[-1]: # If CWD is gateway
              # This check is a bit fragile. For robust local dev, use absolute paths or env vars for config.
              # Or ensure running from project root.
             alt_path = os.path.join("..", TOOLS_JSON_PATH)

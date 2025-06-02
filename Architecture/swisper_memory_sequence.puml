@@ -3,7 +3,7 @@
 title Memory Use in User Interaction
 
 actor User
-participant "Swisper App (Client)" as Client
+participant "AI Assistant App (Client)" as Client
 participant "API Gateway" as Gateway
 participant "Prompt Preprocessor" as Preprocessor
 participant "Memory Store" as Memory

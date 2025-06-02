@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-# Assuming components are in swisper.contract_engine (via __init__.py)
+# Assuming components are in contract_engine (via __init__.py)
 # This requires PYTHONPATH to be set up correctly if tests are run from root
-# or if the test runner discovers tests within the swisper package.
-# For local testing, if swisper/ is the CWD, then:
+# or if the test runner discovers tests within the repository.
+# For local testing, if repository root is the CWD, then:
 # from contract_engine.haystack_components import ... might work if PYTHONPATH includes '.'
 # However, for consistency with how modules are usually structured & imported:
 from contract_engine.haystack_components import (
@@ -12,20 +12,20 @@ from contract_engine.haystack_components import (
     SimplePythonRankingComponent,
     ProductSelectorComponent
 )
-# Fallback for simpler local execution if PYTHONPATH is not set to include parent of swisper
+# Fallback for simpler local execution if PYTHONPATH is not set to include repository root
 # try:
-#     from swisper.contract_engine.haystack_components import (
+#     from contract_engine.haystack_components import (
 #         MockGoogleShoppingComponent,
 #         SimplePythonRankingComponent,
 #         ProductSelectorComponent
 #     )
 # except ImportError:
-#     # This assumes tests are run from a directory where 'swisper' is a subdirectory,
-#     # and 'swisper' itself is not directly in PYTHONPATH, but its parent is.
-#     # Or, that the test runner adds 'swisper' to sys.path.
-#     # This is common if tests are in 'tests/' and code in 'swisper/'.
+#     # This assumes tests are run from a directory where the repository root is accessible,
+#     # and the repository root itself is not directly in PYTHONPATH, but its parent is.
+#     # Or, that the test runner adds the repository root to sys.path.
+#     # This is common if tests are in 'tests/' and code in the repository root.
 #     # A more robust way is to ensure your test execution environment correctly sets PYTHONPATH
-#     # to include the project root (the directory containing 'swisper').
+#     # to include the project root (the repository root directory).
 #     from ..contract_engine.haystack_components import ( # If tests/ is alongside contract_engine/
 #         MockGoogleShoppingComponent,
 #         SimplePythonRankingComponent,

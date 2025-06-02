@@ -3,7 +3,7 @@ version: '3.8'
 services:
   gateway:
     build:
-      context: . # This refers to the swisper/ directory
+      context: . # This refers to the repository root directory
       dockerfile: Dockerfile.gateway
     ports:
       - "8000:8000"

@@ -19,7 +19,7 @@ export default defineConfig({
     // { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
   // Optional: Web server configuration to auto-start frontend dev server
-  // This assumes your frontend is in 'swisper/frontend' and has 'npm run dev'
+  // This assumes your frontend is in 'frontend/' and has 'npm run dev'
   webServer: {
     command: 'cd frontend && npm run dev', // Command to start the frontend dev server
     url: 'http://localhost:5173',     // URL to poll to ensure server is up

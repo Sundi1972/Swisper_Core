@@ -3,7 +3,6 @@ from unittest.mock import patch, AsyncMock, MagicMock, call
 import os
 
 # Adjust import based on how tests are run and PYTHONPATH.
-# This assumes 'swisper' is a package and tests are run in a way that can find it.
 from orchestrator.core import handle, Message
 # For mocking PRODUCT_SELECTION_PIPELINE and async_client, we need to patch them where they are defined/imported.
 # If PRODUCT_SELECTION_PIPELINE is initialized at module level in orchestrator.core,
@@ -82,7 +81,7 @@ def mock_product_pipeline_run():
 @pytest.fixture
 def mock_ask_doc():
     with patch('orchestrator.core.ask_document_pipeline') as mock_ask:
-        mock_ask.return_value = "RAG answer: Swisper is a helpful AI."
+        mock_ask.return_value = "RAG answer: This is a helpful AI assistant."
         yield mock_ask
 
 @pytest.fixture
@@ -179,15 +178,15 @@ async def test_confirmation_no_path(mock_session_store, mock_product_pipeline_ru
 @pytest.mark.asyncio
 async def test_rag_path(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
     session_id = "test_rag_session"
-    messages = [Message(role="user", content="#rag What is Swisper?")]
+    messages = [Message(role="user", content="#rag What is this system?")]
     
     response = await handle(messages, session_id)
 
-    mock_ask_doc.assert_called_once_with(question="What is Swisper?")
-    assert response["reply"] == "RAG answer: Swisper is a helpful AI."
+    mock_ask_doc.assert_called_once_with(question="What is this system?")
+    assert response["reply"] == "RAG answer: This is a helpful AI assistant."
     mock_product_pipeline_run.assert_not_called() # Ensure contract path not taken
     mock_openai_chat_completions_create.assert_not_called() # Ensure general chat path not taken
-    mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": "#rag What is Swisper?"})
+    mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": "#rag What is this system?"})
 
 
 @pytest.mark.asyncio

@@ -1,8 +1,8 @@
 @startuml
 == Use Case 3: Email RAG Search ==
 actor User
-participant "Swisper App" as App3
-participant "Swisper Backend" as Backend3
+participant "AI Assistant App" as App3
+participant "AI Assistant Backend" as Backend3
 participant "Prompt Preprocessor" as Pre3
 participant "Vector DB" as VectorDB
 participant "LLM (GPT-4o)" as LLM3
