@@ -4,7 +4,7 @@ import logging
 
 # Assuming tool_adapter is in PYTHONPATH.
 # If repository root is in PYTHONPATH:
-from tool_adapter.mock_google import mock_google_shopping as search_fn 
+from tool_adapter.mock_google import google_shopping_search as search_fn
 
 logger = logging.getLogger(__name__)
 
@@ -121,3 +121,148 @@ class ProductSelectorComponent(BaseComponent):
             result, _ = self.run(ranked_products=ranked_products_list)
             results.append(result) # result is {"selected_product": ...}
         return {"selected_products_batch": results}, "output_1"
+
+
+class AttributeAnalyzerComponent(BaseComponent):
+    outgoing_edges = 1
+    
+    def __init__(self):
+        super().__init__()
+    
+    def run(self, products: List[Dict[str, Any]], product_query: str) -> Tuple[Dict[str, Any], str]:
+        logger.info(f"AttributeAnalyzerComponent analyzing {len(products)} products for query: {product_query}")
+        try:
+            from contract_engine.llm_helpers import analyze_product_differences
+            analysis = analyze_product_differences(products)
+            
+            attributes = self._extract_attributes_from_analysis(analysis, product_query)
+            
+            output = {
+                "products": products,
+                "analysis": analysis,
+                "extracted_attributes": attributes
+            }
+            return output, "output_1"
+        except Exception as e:
+            logger.error(f"Exception in AttributeAnalyzerComponent: {e}", exc_info=True)
+            return {"products": products, "extracted_attributes": [], "error": str(e)}, "output_1"
+    
+    def _extract_attributes_from_analysis(self, analysis: str, product_query: str) -> List[str]:
+        common_attributes = {
+            "gpu": ["memory", "cooling", "brand", "power consumption", "size"],
+            "washing": ["capacity", "type", "energy rating", "size", "features"],
+            "laptop": ["processor", "memory", "storage", "screen size", "battery"],
+            "phone": ["storage", "camera", "battery", "screen size", "brand"]
+        }
+        
+        query_lower = product_query.lower()
+        for category, attrs in common_attributes.items():
+            if category in query_lower:
+                return attrs
+        
+        return ["brand", "price range", "features", "size"]
+
+
+class ClarificationAskerComponent(BaseComponent):
+    outgoing_edges = 1
+    
+    def __init__(self):
+        super().__init__()
+    
+    def run(self, products: List[Dict[str, Any]], extracted_attributes: List[str], product_query: str) -> Tuple[Dict[str, Any], str]:
+        logger.info(f"ClarificationAskerComponent generating clarification for {len(products)} products")
+        
+        attribute_examples = ", ".join(extracted_attributes[:3])
+        clarification_message = (
+            f"I found {len(products)} results for '{product_query}'. "
+            f"To help you choose the best option, could you provide more criteria? "
+            f"For example: {attribute_examples}, or any specific requirements you have."
+        )
+        
+        output = {
+            "products": products,
+            "extracted_attributes": extracted_attributes,
+            "clarification_message": clarification_message,
+            "needs_clarification": True
+        }
+        return output, "output_1"
+
+
+class ProductFilterComponent(BaseComponent):
+    outgoing_edges = 1
+    
+    def __init__(self):
+        super().__init__()
+    
+    def run(self, products: List[Dict[str, Any]], user_preferences: List[str]) -> Tuple[Dict[str, Any], str]:
+        logger.info(f"ProductFilterComponent filtering {len(products)} products with preferences: {user_preferences}")
+        try:
+            if not user_preferences:
+                return {"filtered_products": products}, "output_1"
+            
+            from contract_engine.llm_helpers import filter_products_with_llm
+            filtered_products = filter_products_with_llm(products, user_preferences)
+            
+            output = {"filtered_products": filtered_products}
+            return output, "output_1"
+        except Exception as e:
+            logger.error(f"Exception in ProductFilterComponent: {e}", exc_info=True)
+            return {"filtered_products": products, "error": str(e)}, "output_1"
+
+
+class CompatibilityCheckerComponent(BaseComponent):
+    outgoing_edges = 1
+    
+    def __init__(self):
+        super().__init__()
+        self._cache = {}
+    
+    def run(self, products: List[Dict[str, Any]], constraints: Dict[str, Any], product_query: str) -> Tuple[Dict[str, Any], str]:
+        logger.info(f"CompatibilityCheckerComponent checking {len(products)} products for constraints: {constraints}")
+        try:
+            if not constraints:
+                return {"compatible_products": products}, "output_1"
+            
+            cache_key = f"{product_query}_{hash(str(constraints))}"
+            if cache_key in self._cache:
+                logger.info("Using cached compatibility results")
+                compatibility_results = self._cache[cache_key]
+            else:
+                enhanced_products = self._enhance_with_web_search(products, constraints, product_query)
+                
+                from contract_engine.llm_helpers import check_product_compatibility
+                compatibility_results = check_product_compatibility(enhanced_products, constraints, product_query)
+                self._cache[cache_key] = compatibility_results
+            
+            compatible_products = []
+            for i, result in enumerate(compatibility_results):
+                if result.get("compatible", False) and i < len(products):
+                    compatible_products.append(products[i])
+            
+            output = {
+                "compatible_products": compatible_products,
+                "compatibility_results": compatibility_results
+            }
+            return output, "output_1"
+        except Exception as e:
+            logger.error(f"Exception in CompatibilityCheckerComponent: {e}", exc_info=True)
+            return {"compatible_products": products, "error": str(e)}, "output_1"
+    
+    def _enhance_with_web_search(self, products: List[Dict[str, Any]], constraints: Dict[str, Any], product_query: str) -> List[Dict[str, Any]]:
+        try:
+            from tool_adapter.mock_google import google_shopping_search
+            
+            constraint_text = " ".join([f"{k} {v}" for k, v in constraints.items()])
+            search_query = f"{product_query} {constraint_text} compatibility specifications"
+            
+            web_results = google_shopping_search(search_query)
+            
+            enhanced_products = products.copy()
+            for product in enhanced_products:
+                product["web_search_enhanced"] = True
+                product["search_query_used"] = search_query
+            
+            return enhanced_products
+        except Exception as e:
+            logger.error(f"Web search enhancement failed: {e}")
+            return products

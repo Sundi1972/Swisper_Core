@@ -1,5 +1,19 @@
 [
   {
+    "name": "google_shopping",
+    "description": "Search for products using real Google Shopping API via SearchAPI.io with fallback to mock data.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "type": "string",
+          "description": "The search query for products."
+        }
+      },
+      "required": ["q"]
+    }
+  },
+  {
     "name": "mock_google_shopping",
     "description": "Return static product list based on a query. For testing purposes.",
     "parameters": {
@@ -11,6 +25,64 @@
         }
       },
       "required": ["q"]
+    }
+  },
+  {
+    "name": "analyze_product_attributes",
+    "description": "Analyze products to extract key differentiating attributes using LLM.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "products": {
+          "type": "array",
+          "description": "List of product objects to analyze."
+        },
+        "product_type": {
+          "type": "string",
+          "description": "Optional product category for better analysis."
+        }
+      },
+      "required": ["products"]
+    }
+  },
+  {
+    "name": "check_compatibility",
+    "description": "Check product compatibility against user constraints using LLM and web search.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "products": {
+          "type": "array",
+          "description": "List of product objects to check."
+        },
+        "constraints": {
+          "type": "object",
+          "description": "User constraints for compatibility checking."
+        },
+        "product_type": {
+          "type": "string",
+          "description": "Optional product category for better compatibility checking."
+        }
+      },
+      "required": ["products", "constraints"]
+    }
+  },
+  {
+    "name": "filter_products_by_preferences",
+    "description": "Filter products based on user preferences using LLM.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "products": {
+          "type": "array",
+          "description": "List of product objects to filter."
+        },
+        "preferences": {
+          "type": "array",
+          "description": "List of user preferences for filtering."
+        }
+      },
+      "required": ["products", "preferences"]
     }
   }
 ]
