@@ -31,7 +31,8 @@ def analyze_product_differences(product_list: list) -> str:
 
     response = client.chat.completions.create(
         model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
+        timeout=30
     )
 
     return response.choices[0].message.content
@@ -53,7 +54,8 @@ def analyze_user_preferences(user_input: str, product_search_results: list) -> d
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
         )
 
         raw_output = response.choices[0].message.content.strip()
@@ -89,7 +91,8 @@ def check_product_compatibility(product_list: list, user_constraints: dict, prod
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
         )
 
         raw_output = response.choices[0].message.content.strip()
@@ -118,7 +121,8 @@ def filter_products_with_llm(product_list: list, preferences: list) -> list:
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
         )
 
         raw_output = response.choices[0].message.content.strip()

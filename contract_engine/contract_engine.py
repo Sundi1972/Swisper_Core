@@ -86,9 +86,116 @@ class ContractStateMachine:
             if not results or (isinstance(results, list) and results and results[0].get("error")):
                 self.logger.warning(f"FSM (session: {session_id}): No products found or error from search for '{product_query}'. Results: {results}")
             
-            self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products. Transition: search → rank_and_select")
-            self.state = "rank_and_select"
+            threshold = parameters.get("product_threshold", 10)
+            if len(results) > threshold:
+                self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products (>{threshold}). Transition: search → analyze_attributes")
+                self.state = "analyze_attributes"
+            else:
+                self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products (<={threshold}). Transition: search → rank_and_select")
+                self.state = "rank_and_select"
             return self.next()
+
+        elif self.state == "analyze_attributes":
+            try:
+                from contract_engine.llm_helpers import analyze_product_differences
+                product_query = parameters.get("product")
+                analysis = analyze_product_differences(self.search_results)
+                
+                attributes = self._extract_attributes_from_analysis(analysis, product_query)
+                self.contract["parameters"]["extracted_attributes"] = attributes
+                
+                self.logger.info(f"FSM (session: {session_id}): Extracted attributes: {attributes}. Transition: analyze_attributes → ask_clarification")
+                self.state = "ask_clarification"
+                return self.next()
+            except Exception as e:
+                self.logger.error(f"FSM (session: {session_id}): Error in analyze_attributes: {e}")
+                self.state = "rank_and_select"
+                return self.next()
+
+        elif self.state == "ask_clarification":
+            extracted_attributes = self.contract["parameters"].get("extracted_attributes", [])
+            product_query = parameters.get("product")
+            
+            attribute_examples = ", ".join(extracted_attributes[:3]) if extracted_attributes else "brand, price range, features"
+            clarification_message = (
+                f"I found {len(self.search_results)} results for '{product_query}'. "
+                f"To help you choose the best option, could you provide more criteria? "
+                f"For example: {attribute_examples}, or any specific requirements you have."
+            )
+            
+            self.logger.info(f"FSM (session: {session_id}): Asking for clarification. Transition: ask_clarification → wait_for_preferences")
+            self.state = "wait_for_preferences"
+            return {"ask_user": clarification_message}
+
+        elif self.state == "wait_for_preferences":
+            if not user_input:
+                return {"ask_user": "Please provide your preferences to help me filter the products."}
+            
+            try:
+                from contract_engine.llm_helpers import analyze_user_preferences
+                preferences_data = analyze_user_preferences(user_input, self.search_results)
+                
+                self.contract["parameters"]["preferences"] = preferences_data.get("preferences", [])
+                self.contract["parameters"]["constraints"] = preferences_data.get("constraints", {})
+                
+                has_compatibility = any(keyword in user_input.lower() for keyword in ["compatible", "compatibility", "works with", "fits"])
+                
+                if has_compatibility and preferences_data.get("constraints"):
+                    self.logger.info(f"FSM (session: {session_id}): Compatibility requirements detected. Transition: wait_for_preferences → check_compatibility")
+                    self.state = "check_compatibility"
+                else:
+                    self.logger.info(f"FSM (session: {session_id}): No compatibility requirements. Transition: wait_for_preferences → filter_products")
+                    self.state = "filter_products"
+                return self.next()
+            except Exception as e:
+                self.logger.error(f"FSM (session: {session_id}): Error analyzing preferences: {e}")
+                self.state = "rank_and_select"
+                return self.next()
+
+        elif self.state == "filter_products":
+            try:
+                from contract_engine.llm_helpers import filter_products_with_llm
+                preferences = self.contract["parameters"].get("preferences", [])
+                
+                if preferences:
+                    filtered_products = filter_products_with_llm(self.search_results, preferences)
+                    self.search_results = filtered_products
+                
+                self.logger.info(f"FSM (session: {session_id}): Filtered to {len(self.search_results)} products. Transition: filter_products → rank_and_select")
+                self.state = "rank_and_select"
+                return self.next()
+            except Exception as e:
+                self.logger.error(f"FSM (session: {session_id}): Error filtering products: {e}")
+                self.state = "rank_and_select"
+                return self.next()
+
+        elif self.state == "check_compatibility":
+            try:
+                from contract_engine.llm_helpers import check_product_compatibility
+                constraints = self.contract["parameters"].get("constraints", {})
+                product_query = self.contract["parameters"].get("product")
+                
+                enhanced_products = self._enhance_with_web_search(self.search_results, constraints, product_query)
+                
+                compatibility_results = check_product_compatibility(enhanced_products, constraints, product_query)
+                
+                compatible_products = []
+                for i, result in enumerate(compatibility_results):
+                    if result.get("compatible", False) and i < len(enhanced_products):
+                        compatible_products.append(enhanced_products[i])
+                
+                self.search_results = compatible_products
+                
+                if not self.search_results:
+                    return {"ask_user": "No compatible products found. Would you like to adjust your requirements or try a different search?"}
+                
+                self.logger.info(f"FSM (session: {session_id}): Found {len(self.search_results)} compatible products. Transition: check_compatibility → rank_and_select")
+                self.state = "rank_and_select"
+                return self.next()
+            except Exception as e:
+                self.logger.error(f"FSM (session: {session_id}): Error checking compatibility: {e}")
+                self.state = "rank_and_select"
+                return self.next()
 
         elif self.state == "rank_and_select":
             selected_product = self.rank_and_select(self.search_results, parameters.get("preferences"))
@@ -149,7 +256,7 @@ class ContractStateMachine:
                 self.logger.error(f"FSM (session: {session_id}): Failed to save final contract: {e}", exc_info=True)
             
             return {"status": "completed", "contract": self.contract}
-        
+
         elif self.state == "error": 
             self.logger.error(f"FSM (session: {session_id}): FSM is in an error state, likely due to template loading failure.")
             return {"status": "failed", "message": "FSM critical error (e.g. template not loaded)."}
@@ -158,6 +265,40 @@ class ContractStateMachine:
             self.logger.error(f"FSM (session: {session_id}): Reached unknown state: {self.state}")
             self.contract["status"] = "failed"
             return {"status": "failed", "message": f"Contract entered an invalid state: {self.state}"}
+    
+    def _extract_attributes_from_analysis(self, analysis: str, product_query: str) -> List[str]:
+        """Extract key attributes from LLM analysis"""
+        common_attributes = {
+            "gpu": ["memory", "cooling", "brand", "power consumption", "size"],
+            "washing": ["capacity", "type", "energy rating", "size", "features"],
+            "laptop": ["processor", "memory", "storage", "screen size", "battery"],
+            "phone": ["storage", "camera", "battery", "screen size", "brand"]
+        }
+        
+        query_lower = product_query.lower()
+        for category, attrs in common_attributes.items():
+            if category in query_lower:
+                return attrs
+        
+        return ["brand", "price range", "features", "size"]
+    
+    def _enhance_with_web_search(self, products: List[Dict[str, Any]], constraints: Dict[str, Any], product_query: str) -> List[Dict[str, Any]]:
+        """Enhance products with web search for compatibility information"""
+        try:
+            constraint_text = " ".join([f"{k} {v}" for k, v in constraints.items()])
+            search_query = f"{product_query} {constraint_text} compatibility specifications"
+            
+            web_results = search_product(q=search_query)
+            
+            enhanced_products = products.copy()
+            for product in enhanced_products:
+                product["web_search_enhanced"] = True
+                product["search_query_used"] = search_query
+            
+            return enhanced_products
+        except Exception as e:
+            self.logger.error(f"Web search enhancement failed: {e}")
+            return products
 
     def rank_and_select(self, filtered_products: List[Dict[str, Any]], preferences: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         if not filtered_products:
