@@ -104,7 +104,36 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         session_store.save_session(session_id)
         return {"reply": reply_content, "session_id": session_id}
 
-    # 2. If no pending confirmation, proceed with routing: Contract, RAG, or Chat
+    stored_fsm = session_store.get_contract_fsm(session_id)
+    if stored_fsm:
+        logger.info("Session %s: Continuing stored contract FSM with user input: '%s'", session_id, last_user_message_content)
+        try:
+            result = stored_fsm.next(last_user_message_content)
+            
+            if "ask_user" in result:
+                reply_content = result["ask_user"]
+                
+                # If it's a confirmation question, set pending confirmation
+                if "confirm" in reply_content.lower() and hasattr(stored_fsm, 'selected_product_for_confirmation'):
+                    set_pending_confirmation(session_id, stored_fsm.selected_product_for_confirmation)
+                    # Clear stored FSM since we're moving to confirmation
+                    session_store.set_contract_fsm(session_id, None)
+                else:
+                    session_store.set_contract_fsm(session_id, stored_fsm)
+            else:
+                reply_content = "Sorry, I couldn't process your request. Could you try rephrasing?"
+                session_store.set_contract_fsm(session_id, None)
+                
+        except Exception as e:
+            logger.error("Error continuing stored contract FSM for session %s: %s", session_id, e, exc_info=True)
+            reply_content = "Sorry, there was an error processing your request."
+            session_store.set_contract_fsm(session_id, None)
+        
+        session_store.add_chat_message(session_id, {"role": "assistant", "content": reply_content})
+        session_store.save_session(session_id)
+        return {"reply": reply_content, "session_id": session_id}
+
+    # 3. If no pending confirmation or stored FSM, proceed with routing: Contract, RAG, or Chat
     contract_keywords = r"\b(buy|purchase|order|acquire|get me|shop for|find a|buy an)\b"
     is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
     
@@ -114,22 +143,46 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
     if is_contract_intent:
         logger.info("Contract path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
         try:
-            # The query for the pipeline is the user message itself (or a processed version if needed)
-            pipeline_result = PRODUCT_SELECTION_PIPELINE.run(query=last_user_message_content)
-            selected_product_node_output = pipeline_result.get("ProductSelector", ({},'')) 
-            selected_product_data = selected_product_node_output[0] 
-            selected_product = selected_product_data.get("selected_product")
-
-            if selected_product and selected_product.get("name"): 
-                set_pending_confirmation(session_id, selected_product)
-                product_name = selected_product.get("name")
-                product_price = selected_product.get("price", "price not available")
-                reply_content = f"I found this product: {product_name} (Price: {product_price}). Would you like to confirm this order? (yes/no)"
+            from contract_engine.contract_engine import ContractStateMachine
+            from contract_engine.llm_helpers import extract_initial_criteria
+            
+            logger.info("Session %s: Extracting criteria from prompt: '%s'", session_id, last_user_message_content)
+            criteria_data = extract_initial_criteria(last_user_message_content)
+            
+            product_match = re.search(r'\b(?:buy|purchase|order|acquire|get me|shop for|find a|buy an)\s+(?:a\s+|an\s+)?(.+)', last_user_message_content, re.IGNORECASE)
+            product_query = product_match.group(1).strip() if product_match else last_user_message_content
+            
+            search_query = criteria_data.get("enhanced_query", product_query)
+            
+            logger.info("Session %s: Extracted criteria: %s", session_id, criteria_data)
+            logger.info("Session %s: Using search query: '%s'", session_id, search_query)
+            
+            # Initialize contract state machine
+            fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+            fsm.fill_parameters({
+                "product": search_query,  # Use enhanced query for search
+                "session_id": session_id,
+                "product_threshold": 10,  # Configurable threshold
+                "initial_criteria": criteria_data,
+                "parsed_specifications": criteria_data.get("specifications", {}),
+                "enhanced_query": search_query
+            })
+            
+            result = fsm.next()
+            
+            if "ask_user" in result:
+                reply_content = result["ask_user"]
+                
+                # If it's a confirmation question, set pending confirmation
+                if "confirm" in reply_content.lower() and hasattr(fsm, 'selected_product_for_confirmation'):
+                    set_pending_confirmation(session_id, fsm.selected_product_for_confirmation)
+                else:
+                    session_store.set_contract_fsm(session_id, fsm)
             else:
-                logger.warning("Pipeline did not select a product for session %s. Query: '%s'. Output: %s", session_id, last_user_message_content, pipeline_result)
                 reply_content = "Sorry, I couldn't find a suitable product for your query. Could you try rephrasing or a different product?"
+                
         except Exception as e:
-            logger.error("Error running ProductSelectionPipeline for session %s: %s", session_id, e, exc_info=True)
+            logger.error("Error running enhanced contract flow for session %s: %s", session_id, e, exc_info=True)
             reply_content = "Sorry, there was an error trying to find products for you."
     
     elif is_rag_intent: # RAG Path

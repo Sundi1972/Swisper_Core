@@ -68,3 +68,16 @@ def clear_pending_confirmation(session_id: str):
         del sessions[session_id]['pending_confirmation_product']
         logger.info(f"Session {session_id}: Cleared pending confirmation.")
         save_session(session_id)
+
+def set_contract_fsm(session_id: str, fsm):
+    """Store contract FSM state for multi-step interactions"""
+    if not hasattr(sessions, '_contract_fsms'):
+        sessions._contract_fsms = {}
+    sessions._contract_fsms[session_id] = fsm
+    logger.info(f"Session {session_id}: Stored contract FSM state.")
+
+def get_contract_fsm(session_id: str):
+    """Retrieve stored contract FSM state"""
+    if hasattr(sessions, '_contract_fsms'):
+        return sessions._contract_fsms.get(session_id)
+    return None
