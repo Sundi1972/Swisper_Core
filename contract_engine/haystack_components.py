@@ -3,8 +3,8 @@ from typing import List, Dict, Any, Optional, Tuple
 import logging
 
 # Assuming tool_adapter is in PYTHONPATH.
-# If swisper/ is the root in PYTHONPATH:
-from swisper.tool_adapter.mock_google import mock_google_shopping as search_fn 
+# If repository root is in PYTHONPATH:
+from tool_adapter.mock_google import mock_google_shopping as search_fn 
 
 logger = logging.getLogger(__name__)
 

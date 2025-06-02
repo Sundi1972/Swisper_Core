@@ -1,8 +1,8 @@
 @startuml
 == Use Case 4: Contract-Based Purchase (Graphics Card) ==
 actor User
-participant "Swisper App" as App4
-participant "Swisper Backend" as Backend4
+participant "AI Assistant App" as App4
+participant "AI Assistant Backend" as Backend4
 participant "Prompt Preprocessor" as Pre4
 participant "Contract Engine" as Contract
 participant "Google Shopping Tool" as Shop

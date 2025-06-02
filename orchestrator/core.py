@@ -11,7 +11,7 @@ import json
 try:
     from contract_engine.contract_pipeline import create_product_selection_pipeline
 except ImportError: 
-    from swisper.contract_engine.contract_pipeline import create_product_selection_pipeline
+    from contract_engine.contract_pipeline import create_product_selection_pipeline
 
 # Import RAG function
 try:
@@ -109,7 +109,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
     is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
     
     rag_trigger_keyword = "#rag" # Note: conceptual code had "#rag " (with space), this is more flexible
-    is_rag_intent = bool(RAG_AVAILABLE and last_user_message_content.lower().startswith(rag_trigger_keyword))
+    is_rag_intent = bool(last_user_message_content.lower().startswith(rag_trigger_keyword))
 
     if is_contract_intent:
         logger.info("Contract path triggered for session %s. Input: '%s'", session_id, last_user_message_content)

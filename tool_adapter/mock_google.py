@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Determine path to mock_gpus.json relative to this file or an absolute path
-# This assumes tool_adapter is one level down from swisper root, and tests is also one level down.
+# This assumes tool_adapter is one level down from repository root, and tests is also one level down.
 MOCK_DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'tests', 'data', 'mock_gpus.json')
 
 
@@ -18,7 +18,7 @@ def mock_google_shopping(q: str) -> List[Dict[str, Any]]:
 
         if not os.path.exists(absolute_mock_data_path):
             logger.error("Mock data file not found at %s. Query: '%s'", absolute_mock_data_path, q)
-            # Try an alternative common path if running from swisper root (e.g. if CWD is swisper/)
+            # Try an alternative common path if running from repository root (e.g. if CWD is repo root)
             alt_path = os.path.join("tests", "data", "mock_gpus.json") 
             if os.path.exists(alt_path):
                 absolute_mock_data_path = alt_path

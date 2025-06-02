@@ -2,9 +2,7 @@ name: Swisper CI
 
 on: [push, pull_request]
 
-defaults:
-  run:
-    working-directory: ./swisper # Ensures commands run in swisper/ context
+
 
 jobs:
   build_and_test:

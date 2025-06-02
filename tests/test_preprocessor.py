@@ -1,7 +1,7 @@
 import pytest
 from unittest import mock
 import datetime
-from swisper.prompt_preprocessor import clean_and_tag # Assuming swisper is in PYTHONPATH for tests
+from prompt_preprocessor import clean_and_tag
 
 # Helper to check ISO format (basic check)
 def is_iso_format(timestamp_str):
@@ -15,16 +15,16 @@ def is_iso_format(timestamp_str):
 def mock_datetime_now():
     # Fixed timestamp for testing
     fixed_now = datetime.datetime(2024, 1, 1, 12, 0, 0)
-    # Patching datetime.datetime within the swisper.prompt_preprocessor module
-    with mock.patch('swisper.prompt_preprocessor.datetime.datetime') as mock_dt_datetime:
+    # Patching datetime.datetime within the prompt_preprocessor module
+    with mock.patch('prompt_preprocessor.datetime.datetime') as mock_dt_datetime:
         mock_dt_datetime.now.return_value = fixed_now
         yield fixed_now.isoformat()
 
 
 @pytest.fixture
 def mock_langdetect():
-    # Mock langdetect.detect within the swisper.prompt_preprocessor module
-    with mock.patch('swisper.prompt_preprocessor.detect') as mock_detect:
+    # Mock langdetect.detect within the prompt_preprocessor module
+    with mock.patch('prompt_preprocessor.detect') as mock_detect:
         # Default mock behavior, can be overridden in tests
         mock_detect.return_value = 'en'
         yield mock_detect
@@ -152,5 +152,5 @@ def test_language_detection_for_empty_cleaned_text(mock_datetime_now, mock_langd
     # Based on current prompt_preprocessor: if cleaned_text: detect() else: detected_language = "und"
     # So, it should not be called.
     
-# To run these tests, ensure pytest is installed and swisper directory is in PYTHONPATH
-# Example: PYTHONPATH=. pytest swisper/tests/test_preprocessor.py
+# To run these tests, ensure pytest is installed and repository root is in PYTHONPATH
+# Example: PYTHONPATH=. pytest tests/test_preprocessor.py

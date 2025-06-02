@@ -9,7 +9,7 @@ stop:
 	docker-compose down
 
 # This assumes your gateway service is named 'gateway' in docker-compose.yml
-# and your sample documents are in 'docs/' relative to the swisper/ root (mounted as /app/docs in container)
+# and your sample documents are in 'docs/' relative to the repository root (mounted as /app/docs in container)
 index-docs:
 	@echo "Indexing documents from ./docs/ into Haystack Document Store via Docker..."
 	docker-compose exec gateway python haystack_pipeline/indexer.py docs/*.txt
@@ -20,7 +20,7 @@ clean-db:
 	# This attempts to remove files that shelve might create.
 	# The exact filenames can vary slightly depending on the shelve backend used by the OS.
 	rm -f orchestrator_sessions.db orchestrator_sessions.db.bak orchestrator_sessions.db.dat orchestrator_sessions.db.dir orchestrator_sessions.db.db
-	@echo "Note: If shelve uses a different backend, other files might need manual removal from the 'swisper/' directory (or mounted volume location)."
+	@echo "Note: If shelve uses a different backend, other files might need manual removal from the repository root (or mounted volume location)."
 
 clean-artifacts:
 	@echo "Removing contract artifacts..."

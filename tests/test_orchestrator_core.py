@@ -3,16 +3,15 @@ from unittest.mock import patch, AsyncMock, MagicMock, call
 import os
 
 # Adjust import based on how tests are run and PYTHONPATH.
-# This assumes 'swisper' is a package and tests are run in a way that can find it.
-from swisper.orchestrator.core import handle, Message
+from orchestrator.core import handle, Message
 # For mocking PRODUCT_SELECTION_PIPELINE and async_client, we need to patch them where they are defined/imported.
 # If PRODUCT_SELECTION_PIPELINE is initialized at module level in orchestrator.core,
 # we might need to patch its creation function if direct patching is tricky.
 
 # It's often easier to patch the functions/objects directly where they are used if they are module-level.
-# For example, patch 'swisper.orchestrator.core.PRODUCT_SELECTION_PIPELINE.run'
-# and 'swisper.orchestrator.core.ask_document_pipeline'
-# and 'swisper.orchestrator.core.async_client'
+# For example, patch 'orchestrator.core.PRODUCT_SELECTION_PIPELINE.run'
+# and 'orchestrator.core.ask_document_pipeline'
+# and 'orchestrator.core.async_client'
 
 @pytest.fixture(autouse=True) # Autouse to ensure environment variable is set for all tests
 def set_openai_api_key():
@@ -28,16 +27,26 @@ def set_openai_api_key():
 
 @pytest.fixture
 def mock_session_store():
-    # Patch 'session_store' in the 'swisper.orchestrator.core' module's namespace
-    with patch('swisper.orchestrator.core.session_store') as mock_store:
-        mock_store.get_pending_confirmation.return_value = None
+    # Patch the individual functions imported directly in orchestrator.core
+    with patch('orchestrator.core.get_pending_confirmation') as mock_get, \
+         patch('orchestrator.core.set_pending_confirmation') as mock_set, \
+         patch('orchestrator.core.clear_pending_confirmation') as mock_clear, \
+         patch('orchestrator.core.session_store') as mock_store:
+        
+        mock_get.return_value = None
         mock_store.get_chat_history.return_value = []
-        # Ensure other methods don't do anything unexpected if called
-        mock_store.set_pending_confirmation = MagicMock()
-        mock_store.clear_pending_confirmation = MagicMock()
         mock_store.add_chat_message = MagicMock()
         mock_store.save_session = MagicMock()
-        yield mock_store
+        
+        mock_session_store_obj = MagicMock()
+        mock_session_store_obj.get_pending_confirmation = mock_get
+        mock_session_store_obj.set_pending_confirmation = mock_set
+        mock_session_store_obj.clear_pending_confirmation = mock_clear
+        mock_session_store_obj.get_chat_history = mock_store.get_chat_history
+        mock_session_store_obj.add_chat_message = mock_store.add_chat_message
+        mock_session_store_obj.save_session = mock_store.save_session
+        
+        yield mock_session_store_obj
 
 @pytest.fixture
 def mock_product_pipeline_run():
@@ -45,7 +54,7 @@ def mock_product_pipeline_run():
     # This assumes PRODUCT_SELECTION_PIPELINE is successfully initialized in orchestrator.core
     # If its initialization can fail or is complex, patching create_product_selection_pipeline might be better.
     try:
-        with patch('swisper.orchestrator.core.PRODUCT_SELECTION_PIPELINE.run') as mock_run:
+        with patch('orchestrator.core.PRODUCT_SELECTION_PIPELINE.run') as mock_run:
             mock_run.return_value = {
                 "ProductSelector": ({"selected_product": {"name": "Mock GPU X", "price": 299.99}}, "output_1")
             }
@@ -53,7 +62,7 @@ def mock_product_pipeline_run():
     except AttributeError: # Handle cases where PRODUCT_SELECTION_PIPELINE might be None due to init failure
         # If PRODUCT_SELECTION_PIPELINE itself is None, we can't patch its 'run' method.
         # So, we patch the 'create_product_selection_pipeline' function to return a mock pipeline.
-        with patch('swisper.orchestrator.core.create_product_selection_pipeline') as mock_create_pipeline:
+        with patch('orchestrator.core.create_product_selection_pipeline') as mock_create_pipeline:
             mock_pipeline_instance = MagicMock()
             mock_pipeline_instance.run.return_value = {
                 "ProductSelector": ({"selected_product": {"name": "Mock GPU X", "price": 299.99}}, "output_1")
@@ -71,16 +80,14 @@ def mock_product_pipeline_run():
 
 @pytest.fixture
 def mock_ask_doc():
-    with patch('swisper.orchestrator.core.ask_document_pipeline') as mock_ask:
-        mock_ask.return_value = "RAG answer: Swisper is a helpful AI."
+    with patch('orchestrator.core.ask_document_pipeline') as mock_ask:
+        mock_ask.return_value = "RAG answer: This is a helpful AI assistant."
         yield mock_ask
 
 @pytest.fixture
 def mock_openai_chat_completions_create():
-    # Path to the create method of the async_client instance in orchestrator.core
-    # We use AsyncMock for async methods.
-    with patch('swisper.orchestrator.core.async_client.chat.completions.create', new_callable=AsyncMock) as mock_create:
-        # Simulate the structure of the OpenAI API response
+    with patch('orchestrator.core.async_client') as mock_client:
+        mock_create = AsyncMock()
         mock_response = MagicMock()
         mock_choice = MagicMock()
         mock_message = MagicMock()
@@ -88,6 +95,8 @@ def mock_openai_chat_completions_create():
         mock_choice.message = mock_message
         mock_response.choices = [mock_choice]
         mock_create.return_value = mock_response
+        
+        mock_client.chat.completions.create = mock_create
         yield mock_create
 
 @pytest.mark.asyncio
@@ -127,9 +136,9 @@ async def test_confirmation_yes_path(mock_session_store, mock_product_pipeline_r
     messages = [Message(role="user", content="yes")]
 
     # Mock file operations for artifact saving
-    with patch('swisper.orchestrator.core.os.makedirs') as mock_makedirs, \
+    with patch('orchestrator.core.os.makedirs') as mock_makedirs, \
          patch('builtins.open', new_callable=MagicMock) as mock_open, \
-         patch('swisper.orchestrator.core.json.dump') as mock_json_dump:
+         patch('orchestrator.core.json.dump') as mock_json_dump:
         
         response = await handle(messages, session_id)
 
@@ -169,15 +178,15 @@ async def test_confirmation_no_path(mock_session_store, mock_product_pipeline_ru
 @pytest.mark.asyncio
 async def test_rag_path(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
     session_id = "test_rag_session"
-    messages = [Message(role="user", content="#rag What is Swisper?")]
+    messages = [Message(role="user", content="#rag What is this system?")]
     
     response = await handle(messages, session_id)
 
-    mock_ask_doc.assert_called_once_with(question="What is Swisper?")
-    assert response["reply"] == "RAG answer: Swisper is a helpful AI."
+    mock_ask_doc.assert_called_once_with(question="What is this system?")
+    assert response["reply"] == "RAG answer: This is a helpful AI assistant."
     mock_product_pipeline_run.assert_not_called() # Ensure contract path not taken
     mock_openai_chat_completions_create.assert_not_called() # Ensure general chat path not taken
-    mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": "#rag What is Swisper?"})
+    mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": "#rag What is this system?"})
 
 
 @pytest.mark.asyncio
@@ -217,8 +226,8 @@ async def test_chat_path(mock_session_store, mock_product_pipeline_run, mock_ope
 @pytest.mark.asyncio
 async def test_rag_path_rag_unavailable(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create):
     # Temporarily patch RAG_AVAILABLE and ask_document_pipeline in orchestrator.core
-    with patch('swisper.orchestrator.core.RAG_AVAILABLE', False), \
-         patch('swisper.orchestrator.core.ask_document_pipeline') as mock_dummy_ask_doc:
+    with patch('orchestrator.core.RAG_AVAILABLE', False), \
+         patch('orchestrator.core.ask_document_pipeline') as mock_dummy_ask_doc:
         # The dummy ask_doc defined in core.py will be used if RAG_AVAILABLE is False at import time.
         # If we patch RAG_AVAILABLE after import, we also need to ensure the dummy function is what's called.
         # The dummy function is: `def ask_document_pipeline(question: str): return "RAG system is currently unavailable due to an import error."`
@@ -237,7 +246,7 @@ async def test_rag_path_rag_unavailable(mock_session_store, mock_product_pipelin
 @pytest.mark.asyncio
 async def test_contract_path_pipeline_unavailable(mock_session_store, mock_openai_chat_completions_create, mock_ask_doc):
     # Patch PRODUCT_SELECTION_PIPELINE to be None in orchestrator.core
-    with patch('swisper.orchestrator.core.PRODUCT_SELECTION_PIPELINE', None):
+    with patch('orchestrator.core.PRODUCT_SELECTION_PIPELINE', None):
         session_id = "test_pipeline_unavailable"
         user_message = "I want to buy a GPU"
         messages = [Message(role="user", content=user_message)]

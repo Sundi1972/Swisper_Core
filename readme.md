@@ -82,7 +82,7 @@ Runs at: http://localhost:5173
 
 "yes" → confirms selected product
 
-#rag What is Swisper? → returns document-based answer
+#rag What is Swisper Core? → returns document-based answer
 
 🧪 Testing
 

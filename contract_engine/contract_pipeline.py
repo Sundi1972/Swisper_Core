@@ -45,9 +45,8 @@ if __name__ == '__main__':
     
     # This example assumes mock_gpus.json is in tests/data/ relative to where this script might be run from
     # or that tool_adapter.mock_google.py correctly resolves its path.
-    # For this test to run, PYTHONPATH might need to be set to include the 'swisper' root directory.
-    # Example: export PYTHONPATH="${PYTHONPATH}:/path/to/your/swisper_mvp_project" (if swisper is root)
-    # or if swisper_mvp_project contains swisper/: export PYTHONPATH="${PYTHONPATH}:/path/to/your/swisper_mvp_project"
+    # For this test to run, PYTHONPATH might need to be set to include the repository root directory.
+    # Example: export PYTHONPATH="${PYTHONPATH}:/path/to/your/Swisper_Core_project"
     
     logger.info("Attempting to create and run product selection pipeline for local testing...")
     
