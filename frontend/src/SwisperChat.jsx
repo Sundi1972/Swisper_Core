@@ -1,4 +1,6 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { Button } from './components/ui/Button';
+import InputField from './components/ui/InputField';
 
 const SwisperChat = forwardRef((props, ref) => {
   const [messages, setMessages] = useState([
@@ -129,38 +131,45 @@ const SwisperChat = forwardRef((props, ref) => {
         ))}
       </div>
 
-      <div className="flex gap-2">
-        <input
-          className="flex-1 border border-chat-muted bg-chat-background text-chat-text rounded px-3 py-2"
-          placeholder="Type your message..."
+      <div className="flex gap-2 mt-4">
+        <InputField
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="Type your message..."
+          className="flex-1"
           disabled={loading}
         />
-        <button
+        <Button
           onClick={handleSend}
           disabled={loading}
-          className="bg-chat-accent text-white px-4 py-2 rounded hover:bg-chat-accent/80"
+          variant="fill"
+          color="primary"
+          size="xs"
         >
-          Send
-        </button>
-        <button
+          {loading ? 'Sending...' : 'Send'}
+        </Button>
+      </div>
+      
+      <div className="flex gap-2 mt-2">
+        <Button
           onClick={handleNewSession}
+          variant="outline"
+          color="secondary"
+          size="xs"
           disabled={loading}
-          className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700"
-          title="Start a new session"
         >
           New Session
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={handleAskDocs}
+          variant="outline"
+          color="secondary"
+          size="xs"
           disabled={loading}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          title="Sends the query '#rag What is Swisper?'"
         >
-          Ask Docs: What is Swisper?
-        </button>
+          Ask Docs
+        </Button>
       </div>
     </div>
   );
