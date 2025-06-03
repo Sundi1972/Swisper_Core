@@ -26,6 +26,8 @@ python-multipart = "^0.0.20"
 langdetect = "^1.0.9"
 emoji = "^2.14.1"
 farm-haystack = "^1.26.4.post0"
+psycopg2-binary = "^2.9.10"
+sqlalchemy = "^2.0.41"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
