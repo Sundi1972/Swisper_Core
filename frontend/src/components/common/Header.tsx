@@ -80,8 +80,7 @@ const Header: React.FC<HeaderProps> = ({
           </svg>
         </button>
         <div className="flex items-center space-x-3">
-          <img src="/swisper-logo-blue.svg" alt="Swisper Logo" className="h-8 w-8" />
-          <img src="/swisper-text-white.svg" alt="Swisper" className="h-6 w-auto" />
+          <img src="/swisper-logo.png" alt="Swisper Logo" className="h-8 w-8" />
         </div>
       </div>
 
