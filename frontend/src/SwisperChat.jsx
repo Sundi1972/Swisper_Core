@@ -131,7 +131,7 @@ const SwisperChat = forwardRef((props, ref) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-6 mb-6 min-h-0">
+      <div className="flex-1 overflow-y-auto space-y-6 mb-20 min-h-0">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[492px] ${
@@ -149,7 +149,7 @@ const SwisperChat = forwardRef((props, ref) => {
         ))}
       </div>
 
-      <div className="bg-[#020305] rounded-lg p-5 flex-shrink-0 sticky bottom-0">
+      <div className="bg-[#020305] rounded-lg p-5 flex-shrink-0 sticky bottom-8">
         <p className="text-[#8f99ad] text-sm mb-4">How can I help?</p>
         <div className="flex items-center space-x-3">
           <button 
