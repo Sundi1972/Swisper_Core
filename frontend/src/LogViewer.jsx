@@ -186,15 +186,15 @@ const LogViewer = () => {
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header Controls */}
-      <div className="bg-gray-50 border border-gray-200 rounded-t-lg p-4">
+      <div className="bg-chat-message border border-chat-muted rounded-t-lg p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">Log Level:</span>
+              <span className="text-sm font-medium text-chat-text">Log Level:</span>
               <select
                 value={logLevel}
                 onChange={(e) => handleLogLevelChange(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-1 bg-chat-message text-chat-text border border-chat-muted rounded-md text-sm hover:bg-chat-background focus:outline-none focus:ring-2 focus:ring-chat-accent"
               >
                 {logLevels.map(level => (
                   <option key={level} value={level}>{level}</option>
@@ -204,14 +204,14 @@ const LogViewer = () => {
             
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-chat-secondary">
                 {isConnected ? 'Connected' : 'Disconnected'}
               </span>
             </div>
           </div>
           
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-sm text-gray-600">
+            <label className="flex items-center gap-2 text-sm text-chat-secondary">
               <input
                 type="checkbox"
                 checked={autoScroll}
@@ -222,11 +222,11 @@ const LogViewer = () => {
             </label>
             
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">View:</span>
+              <span className="text-sm text-chat-secondary">View:</span>
               <select
                 value={viewMode}
                 onChange={(e) => setViewMode(e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-2 py-1 bg-chat-message text-chat-text border border-chat-muted rounded text-sm hover:bg-chat-background focus:outline-none focus:ring-2 focus:ring-chat-accent"
               >
                 <option value="flow">Flow Diagram</option>
                 <option value="compact">Compact</option>
@@ -235,14 +235,14 @@ const LogViewer = () => {
             
             <button
               onClick={refreshLogs}
-              className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1 bg-chat-accent text-white text-sm rounded-md hover:bg-chat-accent/80 focus:outline-none focus:ring-2 focus:ring-chat-accent"
             >
               Refresh
             </button>
             
             <button
               onClick={clearLogs}
-              className="px-3 py-1 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              className="px-3 py-1 bg-chat-muted text-white text-sm rounded-md hover:bg-chat-muted/80 focus:outline-none focus:ring-2 focus:ring-chat-muted"
             >
               Clear
             </button>
@@ -251,7 +251,7 @@ const LogViewer = () => {
       </div>
 
       {/* Log Display */}
-      <div className="bg-gray-900 text-gray-100 text-sm h-96 overflow-y-auto border-l border-r border-b border-gray-200 rounded-b-lg">
+      <div className="bg-chat-background text-chat-text text-sm h-96 overflow-y-auto border-l border-r border-b border-chat-muted rounded-b-lg">
         <div className="p-4">
           {logs.length === 0 ? (
             <div className="text-gray-500 text-center py-8">
@@ -456,7 +456,7 @@ const LogViewer = () => {
       </div>
       
       {/* Footer Info */}
-      <div className="text-xs text-gray-500 mt-2 text-center">
+      <div className="text-xs text-chat-secondary mt-2 text-center">
         Showing {logs.length} log entries at {logLevel} level and above
       </div>
     </div>
