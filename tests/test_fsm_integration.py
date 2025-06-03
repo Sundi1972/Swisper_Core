@@ -28,7 +28,7 @@ class TestFSMIntegration:
         result = fsm.next()
         result_str = str(result) if isinstance(result, dict) else result
         assert "RTX 4090" in result_str
-        assert fsm.context.current_state in ["search", "analyze_attributes", "confirm_order"]
+        assert fsm.context.current_state in ["search", "analyze_attributes", "confirm_selection", "confirm_order"]
 
     def test_fsm_state_transitions(self):
         fsm = ContractStateMachine("contract_templates/purchase_item.yaml")

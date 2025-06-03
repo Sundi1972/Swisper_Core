@@ -335,3 +335,98 @@ def filter_products_with_llm(product_list: list, preferences: list) -> list:
     except Exception as e:
         print("❌ Failed to filter products:", str(e))
         return []
+
+def generate_product_recommendation(products: list, user_preferences: list, user_constraints: dict) -> dict:
+    """
+    Generate LLM-powered recommendation for top 5 products based on user preferences.
+    
+    Args:
+        products: List of top 5 products to analyze
+        user_preferences: User preferences extracted from input
+        user_constraints: User constraints/requirements
+        
+    Returns:
+        Dict with recommendation analysis and suggested choice
+    """
+    if not products or len(products) == 0:
+        return {
+            "numbered_products": [],
+            "recommendation": {
+                "choice": None,
+                "reasoning": "No products available for recommendation"
+            }
+        }
+    
+    top_5_products = products[:5]
+    
+    prompt = f"""
+    You are an expert product recommendation assistant. Analyze these {len(top_5_products)} products based on the user's preferences and constraints.
+
+    User Preferences: {json.dumps(user_preferences)}
+    User Constraints: {json.dumps(user_constraints)}
+
+    Products to analyze:
+    {json.dumps(top_5_products, indent=2)}
+
+    Please provide:
+    1. A numbered list (1-{len(top_5_products)}) of the products with key specs and prices
+    2. Your top recommendation (1-{len(top_5_products)}) with detailed reasoning considering:
+       - How well each product matches user preferences
+       - Price-to-value ratio
+       - Reviews and ratings
+       - Technical specifications alignment
+
+    Return a JSON object with this structure:
+    {{
+        "numbered_products": [
+            {{"number": 1, "name": "Product Name", "price": "Price", "key_specs": "Brief specs"}},
+            ...
+        ],
+        "recommendation": {{
+            "choice": 1,
+            "reasoning": "Detailed explanation of why this is the best choice"
+        }}
+    }}
+
+    Return only valid JSON. Do not include markdown or explanations.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
+        )
+
+        raw_output = response.choices[0].message.content.strip()
+        print("📎 Recommendation Output:\n", raw_output)
+
+        if raw_output.startswith("```"):
+            raw_output = re.sub(r"^```(?:json)?\s*", "", raw_output)
+            raw_output = re.sub(r"\s*```$", "", raw_output)
+
+        recommendation_data = json.loads(raw_output)
+        
+        if "numbered_products" not in recommendation_data or "recommendation" not in recommendation_data:
+            raise ValueError("Invalid recommendation structure")
+            
+        return recommendation_data
+
+    except Exception as e:
+        print("❌ Failed to generate recommendation:", str(e))
+        numbered_products = []
+        for i, product in enumerate(top_5_products, 1):
+            numbered_products.append({
+                "number": i,
+                "name": product.get("name", f"Product {i}"),
+                "price": product.get("price", "Price not available"),
+                "key_specs": product.get("description", "Specs not available")[:100]
+            })
+        
+        return {
+            "numbered_products": numbered_products,
+            "recommendation": {
+                "choice": 1,
+                "reasoning": "Based on highest rating and best price-to-value ratio"
+            }
+        }

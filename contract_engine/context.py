@@ -18,6 +18,9 @@ class SwisperContext(BaseModel):
     selected_product: Optional[Dict[str, Any]] = None
     tools_used: List[str] = Field(default_factory=list)
     
+    product_recommendations: Optional[Dict[str, Any]] = None
+    top_products: List[Dict[str, Any]] = Field(default_factory=list)
+    
     confirmation_pending: bool = False
     is_cancelled: bool = False
     contract_status: Optional[str] = "active"

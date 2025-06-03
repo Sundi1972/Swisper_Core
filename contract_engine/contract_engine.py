@@ -189,6 +189,10 @@ class ContractStateMachine:
                 self.contract["parameters"]["preferences"] = self.context.preferences
                 self.contract["parameters"]["constraints"] = self.context.constraints
                 
+                self.logger.info(f"FSM (session: {session_id}): Stored preferences: {self.context.preferences}")
+                self.logger.info(f"FSM (session: {session_id}): Stored constraints: {self.context.constraints}")
+                self.logger.info(f"FSM (session: {session_id}): Contract parameters updated with preferences and constraints")
+                
                 has_compatibility = any(keyword in user_input.lower() for keyword in ["compatible", "compatibility", "works with", "fits"])
                 
                 if has_compatibility and self.context.constraints:
@@ -247,29 +251,97 @@ class ContractStateMachine:
                 return self.next()
 
         elif self.context.current_state == "rank_and_select":
-            selected_product = self.rank_and_select(self.context.search_results, self.context.preferences)
+            top_products = self.rank_and_select(self.context.search_results, self.context.preferences)
             
-            self.logger.info(f"FSM (session: {session_id}): Selected product: {selected_product.get('name', 'None')}")
-            self.contract.setdefault("subtasks", []).append({
-                "id": "select_product",
-                "type": "rank_and_select",
-                "status": "completed",
-                "output": selected_product 
-            })
-            self.context.selected_product = selected_product
-
-            self.logger.info(f"FSM (session: {session_id}): Transition: rank_and_select → confirm_order")
-            self.context.update_state("confirm_order")
+            if not top_products:
+                return {"ask_user": "No suitable products were found. Would you like to try a different search?"}
             
-            product_name = selected_product.get("name", "this product")
-            product_price = selected_product.get("price")
-            price_info = f" at {product_price} CHF" if product_price is not None else ""
+            from contract_engine.llm_helpers import generate_product_recommendation
+            recommendation_data = generate_product_recommendation(
+                top_products, 
+                self.context.preferences, 
+                self.context.constraints
+            )
+            
+            self.context.product_recommendations = recommendation_data
+            self.context.top_products = top_products
+            
+            numbered_list = "\n".join([
+                f"{item['number']}. {item['name']} - {item['price']} ({item['key_specs']})"
+                for item in recommendation_data.get("numbered_products", [])
+            ])
+            
+            recommendation = recommendation_data.get("recommendation", {})
+            recommended_choice = recommendation.get("choice", 1)
+            reasoning = recommendation.get("reasoning", "Best overall value")
+            
+            self.logger.info(f"FSM (session: {session_id}): Generated top 5 recommendations. Transition: rank_and_select → confirm_selection")
+            self.context.update_state("confirm_selection")
+            
+            num_products = len(top_products)
+            return {
+                "ask_user": f"Here are the top 5 options:\n\n{numbered_list}\n\n"
+                           f"My recommendation: Option {recommended_choice}\n"
+                           f"Reason: {reasoning}\n\n"
+                           f"Please enter the number (1-{num_products}) of your choice, or type 'yes' to go with my recommendation."
+            }
 
-            if not selected_product or not selected_product.get("name"):
-                return {"ask_user": "No suitable product was found. Would you like to try a different search?"}
-            else:
-                self.context.confirmation_pending = True
-                return {"ask_user": f"Found: {product_name}{price_info}. Shall I go ahead and confirm this order?"}
+        elif self.context.current_state == "confirm_selection":
+            self.logger.info(f"FSM (session: {session_id}): In confirm_selection, user_input: '{user_input}'")
+            
+            try:
+                from contract_engine.llm_helpers import is_cancel_request
+                
+                if is_cancel_request(user_input):
+                    self.contract["status"] = "cancelled_by_user"
+                    self.logger.info(f"FSM (session: {session_id}): Selection cancelled by user.")
+                    return {"status": "cancelled", "message": "Purchase cancelled. Is there anything else I can help you with?"}
+                
+                selected_product = None
+                
+                if user_input and user_input.lower() in ["yes", "y", "ok", "okay", "sure"]:
+                    recommendation = self.context.product_recommendations.get("recommendation", {})
+                    choice_number = recommendation.get("choice", 1)
+                    if choice_number <= len(self.context.top_products):
+                        selected_product = self.context.top_products[choice_number - 1]
+                
+                elif user_input and user_input.strip().isdigit():
+                    choice_number = int(user_input.strip())
+                    if 1 <= choice_number <= len(self.context.top_products):
+                        selected_product = self.context.top_products[choice_number - 1]
+                    else:
+                        return {
+                            "ask_user": f"Please enter a number between 1 and {len(self.context.top_products)}, or 'yes' for my recommendation."
+                        }
+                
+                if selected_product:
+                    self.context.selected_product = selected_product
+                    
+                    self.contract.setdefault("subtasks", []).append({
+                        "id": "select_product",
+                        "type": "user_selection",
+                        "status": "completed",
+                        "output": selected_product,
+                        "user_choice": user_input
+                    })
+                    
+                    product_name = selected_product.get("name", "this product")
+                    product_price = selected_product.get("price")
+                    price_info = f" at {product_price} CHF" if product_price is not None else ""
+                    
+                    self.logger.info(f"FSM (session: {session_id}): User selected {product_name}. Transition: confirm_selection → confirm_order")
+                    self.context.update_state("confirm_order")
+                    self.context.confirmation_pending = True
+                    
+                    return {"ask_user": f"You selected: {product_name}{price_info}. Shall I go ahead and confirm this order?"}
+                else:
+                    return {
+                        "ask_user": "I didn't understand your selection. Please enter a number (1-5) or 'yes' for my recommendation."
+                    }
+                    
+            except Exception as e:
+                self.logger.error(f"FSM (session: {session_id}): Error in confirm_selection: {e}")
+                return {"ask_user": "Sorry, I didn't understand. Please enter a number (1-5) or 'yes' for my recommendation."}
 
         elif self.context.current_state == "confirm_order":
             self.logger.info(f"FSM (session: {session_id}): In confirm_order, user_input: '{user_input}'")
@@ -390,16 +462,10 @@ class ContractStateMachine:
             self.logger.error(f"Web search enhancement failed: {e}")
             return products
 
-    def rank_and_select(self, filtered_products: List[Dict[str, Any]], preferences: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def rank_and_select(self, filtered_products: List[Dict[str, Any]], preferences: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         if not filtered_products:
             self.logger.warning("rank_and_select called with no products.")
-            return {
-                "name": None, 
-                "vendor": "unknown",
-                "price": None,
-                "product_id": None,
-                "reason": "No matching products found to rank"
-            }
+            return []
         
         def score(p: Dict[str, Any]) -> tuple:
             return (-(p.get("rating") or 0), p.get("price") or float("inf")) 
@@ -408,9 +474,9 @@ class ContractStateMachine:
         
         if not sorted_products: 
              self.logger.error("Sorting returned empty list from non-empty product list in rank_and_select.")
-             return {"name": None, "vendor": "unknown", "price": None, "product_id": None, "reason": "Sorting failed or no products"}
+             return []
 
-        return sorted_products[0]
+        return sorted_products[:5]
 
     def save_final_contract(self, filename="final_contract.json"): 
         self.contract["updated_at"] = datetime.datetime.now().isoformat() 
