@@ -2,8 +2,9 @@
 """Test script for enhanced contract flow"""
 
 import sys
+import os
 import asyncio
-sys.path.insert(0, '.')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from contract_engine.contract_engine import ContractStateMachine
 
