@@ -145,8 +145,8 @@ const SwisperChat = forwardRef((props, ref) => {
 
       <div className="flex-1 overflow-y-auto space-y-6 mb-20 min-h-0">
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[492px] ${
+          <div key={i} className={`w-3/4 ${msg.role === 'user' ? 'ml-auto' : 'ml-0'}`}>
+            <div className={`${
               msg.role === 'user' 
                 ? 'bg-[#141923] rounded-lg p-4' 
                 : 'bg-[#222834] rounded-2xl p-4 shadow-[0px_2px_1px_#00000033]'
