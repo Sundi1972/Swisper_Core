@@ -8,16 +8,16 @@ function App() {
   const chatRef = useRef();
 
   return (
-    <main className="min-h-screen bg-white text-black p-6">
+    <main className="min-h-screen bg-chat-background text-chat-text p-6">
       {/* Tab Navigation */}
       <div className="max-w-xl mx-auto mb-4">
-        <div className="flex border-b border-gray-300">
+        <div className="flex border-b border-chat-muted">
           <button
             onClick={() => setActiveTab('chat')}
             className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
               activeTab === 'chat'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-800'
+                ? 'border-chat-accent text-chat-accent'
+                : 'border-transparent text-chat-secondary hover:text-chat-text'
             }`}
           >
             Chat
@@ -26,8 +26,8 @@ function App() {
             onClick={() => setActiveTab('contracts')}
             className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
               activeTab === 'contracts'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-800'
+                ? 'border-chat-accent text-chat-accent'
+                : 'border-transparent text-chat-secondary hover:text-chat-text'
             }`}
           >
             Contracts
@@ -36,8 +36,8 @@ function App() {
             onClick={() => setActiveTab('logs')}
             className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
               activeTab === 'logs'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-800'
+                ? 'border-chat-accent text-chat-accent'
+                : 'border-transparent text-chat-secondary hover:text-chat-text'
             }`}
           >
             Logs
