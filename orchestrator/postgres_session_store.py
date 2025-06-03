@@ -192,7 +192,14 @@ def set_contract_fsm(session_id: str, fsm):
             metadata = session.session_metadata or {}
             
             if fsm and hasattr(fsm, 'context'):
-                metadata['contract_context'] = fsm.context.to_dict()
+                context_dict = fsm.context.to_dict()
+                if hasattr(fsm, 'contract_template'):
+                    context_dict['contract_template'] = fsm.contract_template
+                elif hasattr(fsm, 'contract') and hasattr(fsm.contract, 'template_path'):
+                    context_dict['contract_template'] = fsm.contract.template_path
+                else:
+                    context_dict['contract_template'] = 'contract_templates/purchase_item.yaml'
+                metadata['contract_context'] = context_dict
             else:
                 metadata['contract_context'] = None
             
@@ -221,9 +228,19 @@ def get_contract_fsm(session_id: str):
             context_data = metadata.get('contract_context')
             
             if context_data:
-                from contract_engine.context import SwisperContext
-                context = SwisperContext.from_dict(context_data)
-                return context
+                try:
+                    from contract_engine.contract_engine import ContractStateMachine
+                    from contract_engine.context import SwisperContext
+                    
+                    contract_template = context_data.get('contract_template', 'contract_templates/purchase_item.yaml')
+                    fsm = ContractStateMachine(contract_template)
+                    fsm.context = SwisperContext.from_dict(context_data)
+                    
+                    logger.info(f"Reconstructed contract FSM for session {session_id} from context")
+                    return fsm
+                except Exception as e:
+                    logger.error(f"Error reconstructing FSM for session {session_id}: {e}")
+                    return None
             
             return None
             

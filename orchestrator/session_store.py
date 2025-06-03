@@ -116,21 +116,58 @@ except Exception as e:
         sessions._contract_fsms[session_id] = fsm
         
         if fsm and hasattr(fsm, 'context'):
-            sessions._contract_contexts[session_id] = fsm.context.to_dict()
+            context_dict = fsm.context.to_dict()
+            if hasattr(fsm, 'contract_template'):
+                context_dict['contract_template'] = fsm.contract_template
+            elif hasattr(fsm, 'contract') and hasattr(fsm.contract, 'template_path'):
+                context_dict['contract_template'] = fsm.contract.template_path
+            else:
+                context_dict['contract_template'] = 'contract_templates/purchase_item.yaml'
+            sessions._contract_contexts[session_id] = context_dict
         else:
             sessions._contract_contexts[session_id] = None
             
         logger.info(f"Session {session_id}: Stored contract FSM state and context.")
 
     def get_contract_fsm(session_id: str):
-        if hasattr(sessions, '_contract_fsms'):
-            fsm = sessions._contract_fsms.get(session_id)
-            if fsm and hasattr(sessions, '_contract_contexts'):
-                context_data = sessions._contract_contexts.get(session_id)
-                if context_data:
+        if hasattr(sessions, '_contract_contexts'):
+            context_data = sessions._contract_contexts.get(session_id)
+            if context_data:
+                try:
+                    from contract_engine.contract_engine import ContractStateMachine
                     from contract_engine.context import SwisperContext
+                    
+                    contract_template = context_data.get('contract_template', 'contract_templates/purchase_item.yaml')
+                    fsm = ContractStateMachine(contract_template)
                     fsm.context = SwisperContext.from_dict(context_data)
-            return fsm
+                    
+                    logger.info(f"Reconstructed contract FSM for session {session_id} from context")
+                    return fsm
+                except Exception as e:
+                    logger.error(f"Error reconstructing FSM for session {session_id}: {e}")
+                    return None
+        
+        if hasattr(sessions, '_contract_fsms'):
+            stored_obj = sessions._contract_fsms.get(session_id)
+            if stored_obj:
+                if hasattr(stored_obj, 'next') and callable(getattr(stored_obj, 'next')):
+                    logger.info(f"Using stored FSM object for session {session_id}")
+                    return stored_obj
+                else:
+                    logger.warning(f"Stored object for session {session_id} is not a valid FSM (type: {type(stored_obj)})")
+                    if hasattr(stored_obj, 'to_dict'):
+                        try:
+                            from contract_engine.contract_engine import ContractStateMachine
+                            context_dict = stored_obj.to_dict()
+                            contract_template = context_dict.get('contract_template', 'contract_templates/purchase_item.yaml')
+                            fsm = ContractStateMachine(contract_template)
+                            fsm.context = stored_obj
+                            logger.info(f"Reconstructed FSM from stored context for session {session_id}")
+                            return fsm
+                        except Exception as e:
+                            logger.error(f"Error reconstructing FSM from stored context for session {session_id}: {e}")
+                            return None
+        
         return None
 
     def get_contract_context(session_id: str):
