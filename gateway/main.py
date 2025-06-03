@@ -318,7 +318,7 @@ async def get_sessions() -> Dict[str, Any]:
     try:
         from orchestrator.session_store import get_all_sessions
         
-        sessions_data = get_all_sessions()
+        sessions_data = await get_all_sessions()
         return {
             "sessions": sessions_data,
             "total": len(sessions_data)

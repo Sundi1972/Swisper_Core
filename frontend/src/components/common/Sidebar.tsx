@@ -3,9 +3,10 @@ import { Button } from '../ui/Button';
 
 interface Session {
   id: string;
+  title?: string;
+  last_user_message?: string;
   message_count: number;
-  last_message: string;
-  last_timestamp: string | null;
+  last_updated?: string;
   has_contract: boolean;
 }
 
@@ -36,8 +37,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       
       const sessionArray = Object.values(data.sessions || {}) as Session[];
       sessionArray.sort((a, b) => {
-        const timeA = a.last_timestamp ? new Date(a.last_timestamp).getTime() : 0;
-        const timeB = b.last_timestamp ? new Date(b.last_timestamp).getTime() : 0;
+        const timeA = a.last_updated ? new Date(a.last_updated).getTime() : 0;
+        const timeB = b.last_updated ? new Date(b.last_updated).getTime() : 0;
         return timeB - timeA;
       });
       
@@ -125,18 +126,16 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="text-[#f9fbfc] text-sm font-medium truncate">
-                        Session {session.id.slice(-8)}
+                        {session.title || 'Untitled Session'}
                         {session.has_contract && (
                           <span className="ml-1 text-[#00a9dd]">📄</span>
                         )}
                       </div>
-                      {session.last_message && (
-                        <div className="text-[#b6c2d1] text-xs truncate mt-1">
-                          {session.last_message}
-                        </div>
-                      )}
+                      <div className="text-[#b6c2d1] text-xs truncate mt-1">
+                        {session.last_user_message || 'No messages yet'}
+                      </div>
                       <div className="text-[#8f99ad] text-xs mt-1">
-                        {session.message_count} messages • {formatTimestamp(session.last_timestamp)}
+                        {session.message_count} messages{session.last_updated ? ` • ${session.last_updated}` : ''}
                       </div>
                     </div>
                   </div>
