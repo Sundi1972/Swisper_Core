@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { Button } from './components/ui/Button';
 import InputField from './components/ui/InputField';
 
@@ -9,6 +9,7 @@ const SwisperChat = forwardRef((props, ref) => {
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef(null);
 
   // Persistent session ID using localStorage
   useEffect(() => {
@@ -39,6 +40,12 @@ const SwisperChat = forwardRef((props, ref) => {
       localStorage.setItem(`chat_history_${sessionId}`, JSON.stringify(messages));
     }
   }, [messages, sessionId]);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || !sessionId) return;
@@ -129,6 +136,7 @@ const SwisperChat = forwardRef((props, ref) => {
             <span className="font-semibold">{msg.role === 'user' ? 'You' : 'Swisper'}:</span> {msg.content}
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="flex gap-2 mt-4">
