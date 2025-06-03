@@ -9,6 +9,7 @@ const Button: React.FC<ButtonProps> = ({
   disabled = false,
   children,
   onClick = () => {},
+  title,
 }) => {
   const baseClasses = 'font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
   
@@ -38,6 +39,7 @@ const Button: React.FC<ButtonProps> = ({
       className={buttonClasses}
       onClick={onClick}
       disabled={disabled}
+      title={title}
     >
       {children}
     </button>
