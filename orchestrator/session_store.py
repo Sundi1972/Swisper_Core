@@ -2,6 +2,7 @@ import os
 import shelve
 import atexit
 import logging
+import datetime
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -33,19 +34,38 @@ def add_chat_message(session_id: str, message: Dict[str, str]):
         sessions[session_id] = {"chat_history": []} # Initialize with at least chat_history
     
     history = sessions[session_id].get("chat_history", [])
-    history.append(message)
+    message_with_timestamp = {**message, "timestamp": datetime.datetime.now().isoformat()}
+    history.append(message_with_timestamp)
     sessions[session_id]["chat_history"] = history
     logger.debug(f"Added message to history for session {session_id}. New history length: {len(history)}")
 
 def save_session(session_id: str):
-    if hasattr(sessions, 'sync') and session_id in sessions:
-        try:
-            sessions.sync()
-            logger.debug(f"Session {session_id} synced to disk.")
-        except Exception as e:
-            logger.error(f"Error syncing session {session_id} to disk: {e}", exc_info=True)
-    elif not hasattr(sessions, 'sync'):
-        logger.warning("Shelve object does not have 'sync' method. Sessions may not be persisted if shelve failed to initialize.")
+    try:
+        if session_id in sessions:
+            session_data = sessions[session_id]
+            chat_history = session_data.get("chat_history", [])
+            
+            last_user_msg = None
+            last_msg_time = None
+            
+            for msg in reversed(chat_history):
+                if msg.get("role") == "user":
+                    last_user_msg = msg.get("content", "")
+                    last_msg_time = msg.get("timestamp")
+                    break
+            
+            session_data["last_user_message"] = last_user_msg
+            session_data["last_message_time"] = last_msg_time
+            
+            sessions[session_id] = session_data
+            
+            if hasattr(sessions, 'sync'):
+                sessions.sync()
+                logger.debug(f"Session {session_id} synced to disk.")
+        else:
+            logger.warning(f"Attempted to save non-existent session: {session_id}")
+    except Exception as e:
+        logger.error(f"Error saving session {session_id}: {e}", exc_info=True)
 
 def set_pending_confirmation(session_id: str, product_details: Optional[Dict[str, Any]]):
     if session_id not in sessions:
@@ -103,7 +123,55 @@ def get_contract_context(session_id: str):
         return sessions._contract_contexts.get(session_id)
     return None
 
-def get_all_sessions() -> Dict[str, Dict[str, Any]]:
+async def generate_session_title(chat_history: List[Dict[str, str]]) -> str:
+    """Generate a descriptive title for a session using LLM analysis of first 3 messages or 1000 tokens"""
+    try:
+        from .llm_adapter import get_llm_adapter
+        
+        messages_for_title = []
+        total_tokens = 0
+        
+        for i, msg in enumerate(chat_history[:6]):  # Max 3 user + 3 assistant messages
+            content = msg.get("content", "")
+            msg_tokens = len(content) // 4
+            
+            if total_tokens + msg_tokens > 1000 or len(messages_for_title) >= 6:
+                break
+                
+            messages_for_title.append(msg)
+            total_tokens += msg_tokens
+        
+        if not messages_for_title:
+            return "Untitled Session"
+        
+        conversation_text = "\n".join([
+            f"{msg.get('role', 'unknown')}: {msg.get('content', '')}" 
+            for msg in messages_for_title
+        ])
+        
+        title_prompt = f"""You are a helpful assistant. Summarize this chat session with a short descriptive title that helps the user remember what this session was about. Your answer must be:
+- A maximum of 24 characters
+- Descriptive but concise
+- No quotation marks or punctuation at the end
+
+Return only the title string.
+
+Conversation:
+{conversation_text}"""
+        
+        llm_adapter = get_llm_adapter()
+        response = llm_adapter.chat_completion([
+            {"role": "user", "content": title_prompt}
+        ])
+        
+        title = response.strip()[:24]  # Ensure max 24 chars
+        return title if title else "Untitled Session"
+        
+    except Exception as e:
+        logger.error(f"Error generating session title: {e}", exc_info=True)
+        return "Untitled Session"
+
+async def get_all_sessions() -> Dict[str, Dict[str, Any]]:
     """Get all sessions with metadata for frontend display"""
     try:
         if not hasattr(sessions, 'keys'):
@@ -115,18 +183,39 @@ def get_all_sessions() -> Dict[str, Dict[str, Any]]:
             session_data = sessions[session_id]
             chat_history = session_data.get("chat_history", [])
             
-            last_message = ""
-            last_timestamp = None
-            if chat_history:
-                last_msg = chat_history[-1]
-                last_message = last_msg.get("content", "")[:100] + ("..." if len(last_msg.get("content", "")) > 100 else "")
-                last_timestamp = last_msg.get("timestamp")
+            title = session_data.get("title")
+            if not title and chat_history:
+                title = await generate_session_title(chat_history)
+                session_data["title"] = title
+                sessions[session_id] = session_data
+            elif not title:
+                title = "Untitled Session"
+            
+            last_user_message = session_data.get("last_user_message", "")
+            if last_user_message:
+                if len(last_user_message) > 48:
+                    truncated = last_user_message[:48]
+                    last_space = truncated.rfind(' ')
+                    if last_space > 0:
+                        last_user_message = truncated[:last_space] + "…"
+                    else:
+                        last_user_message = truncated + "…"
+            
+            last_message_time = session_data.get("last_message_time")
+            formatted_time = ""
+            if last_message_time:
+                try:
+                    dt = datetime.datetime.fromisoformat(last_message_time)
+                    formatted_time = dt.strftime("%d %b, %H:%M")
+                except:
+                    formatted_time = ""
             
             session_list[session_id] = {
                 "id": session_id,
+                "title": title,
+                "last_user_message": last_user_message,
                 "message_count": len(chat_history),
-                "last_message": last_message,
-                "last_timestamp": last_timestamp,
+                "last_updated": formatted_time,
                 "has_contract": bool(session_data.get("pending_confirmation_product"))
             }
         
