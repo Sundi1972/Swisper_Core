@@ -68,16 +68,14 @@ const SwisperChat = forwardRef((props, ref) => {
       if (data.reply) {
         setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
       }
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong." }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleSend();
-  };
+
 
   const handleNewSession = () => {
     const newSessionId = crypto.randomUUID();
@@ -110,7 +108,7 @@ const SwisperChat = forwardRef((props, ref) => {
       if (data.reply) {
         setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
       }
-    } catch (err) {
+    } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong with RAG query." }]);
     } finally {
       setLoading(false);
@@ -119,12 +117,16 @@ const SwisperChat = forwardRef((props, ref) => {
   };
 
   const handleVoiceInput = () => {
-    console.log('Voice input activated');
+    console.log('Voice mode activated');
   };
 
-  const handleAddAction = () => {
-    console.log('Add action triggered');
+  const handleAddFile = () => {
+    console.log('Add file triggered');
   };
+
+  useImperativeHandle(ref, () => ({
+    handleNewSession
+  }));
 
 
   return (
@@ -161,24 +163,18 @@ const SwisperChat = forwardRef((props, ref) => {
         <p className="text-[#8f99ad] text-sm mb-4">How can I help?</p>
         <div className="flex items-center space-x-3">
           <button 
-            onClick={handleAddAction}
-            className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center text-[#b6c2d1] text-base hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
-          >
-            +
-          </button>
-          <button 
-            onClick={handleNewSession}
+            onClick={handleAddFile}
             className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
-            title="New Session"
+            title="Add File"
           >
             <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
           </button>
           <button 
             onClick={handleAskDocs}
             className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
-            title="Ask Docs"
+            title="Test RAG"
           >
             <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -187,7 +183,7 @@ const SwisperChat = forwardRef((props, ref) => {
           <button 
             onClick={handleVoiceInput}
             className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
-            title="Voice Input"
+            title="Voice Mode"
           >
             <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
