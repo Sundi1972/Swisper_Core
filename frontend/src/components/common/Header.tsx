@@ -81,6 +81,7 @@ const Header: React.FC<HeaderProps> = ({
         </button>
         <div className="flex items-center space-x-3">
           <img src="/swisper-logo.png" alt="Swisper Logo" className="h-8 w-8" />
+          <img src="/swisper-text.png" alt="Swisper" className="h-6 w-auto" />
         </div>
       </div>
 
@@ -95,9 +96,7 @@ const Header: React.FC<HeaderProps> = ({
             onChange={handleSearchChange}
             className="border-none bg-transparent text-[#f9fbfc] placeholder-[#f9fbfc] focus:border-none"
           />
-          <svg className="h-6 w-6 ml-3 cursor-pointer text-[#8f99ad]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
+          <img src="/search-icon.png" alt="Search Filter" className="h-6 w-6 ml-3 cursor-pointer" />
         </div>
         
         {showResults && (
