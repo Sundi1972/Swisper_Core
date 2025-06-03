@@ -27,6 +27,6 @@ services:
       - LOG_LEVEL=INFO
       - PYTHONPATH=/app
     command: uvicorn gateway.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app
-    # Optional: enable if you want to load env vars from file automatically
-    # env_file:
-    #   - .env
+    # Load environment variables from .env file
+    env_file:
+      - .env
