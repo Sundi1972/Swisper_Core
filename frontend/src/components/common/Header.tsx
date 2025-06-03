@@ -148,9 +148,7 @@ const Header: React.FC<HeaderProps> = ({
             <div className={`w-[30px] h-[30px] bg-white rounded-full transition-transform ${isFullWidth ? 'translate-x-[24px]' : 'translate-x-[2px]'} mt-[2px]`}></div>
           </div>
         </button>
-        <svg className="h-6 w-6 cursor-pointer text-[#8f99ad]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-        </svg>
+        <img src="/pause-icon.png" alt="Pause" className="h-6 w-6 cursor-pointer" />
         <svg className="h-6 w-6 cursor-pointer text-[#8f99ad]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
         </svg>
