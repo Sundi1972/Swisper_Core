@@ -1,8 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100;200;300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-primary-light: #4da6ff;
+  --color-primary: #0078ff;
+  --color-primary-dark: #0057b8;
+  
+  --color-chat-background: #020305;
+  --color-chat-sidebar: #141923;
+  --color-chat-message: #222834;
+  --color-chat-text: #f9fbfc;
+  --color-chat-secondary: #b6c2d1;
+  --color-chat-muted: #8f99ad;
+  --color-chat-accent: #00a9dd;
+  
+  --font-family-hanken: 'Hanken Grotesk', sans-serif;
+  --font-family-inter: 'Inter', sans-serif;
+}
 
 body {
   font-family: 'Hanken Grotesk', 'Inter', sans-serif;
