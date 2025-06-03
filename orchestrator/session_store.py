@@ -102,3 +102,71 @@ def get_contract_context(session_id: str):
     if hasattr(sessions, '_contract_contexts'):
         return sessions._contract_contexts.get(session_id)
     return None
+
+def get_all_sessions() -> Dict[str, Dict[str, Any]]:
+    """Get all sessions with metadata for frontend display"""
+    try:
+        if not hasattr(sessions, 'keys'):
+            logger.warning("Sessions object does not have keys method. Returning empty dict.")
+            return {}
+        
+        session_list = {}
+        for session_id in sessions.keys():
+            session_data = sessions[session_id]
+            chat_history = session_data.get("chat_history", [])
+            
+            last_message = ""
+            last_timestamp = None
+            if chat_history:
+                last_msg = chat_history[-1]
+                last_message = last_msg.get("content", "")[:100] + ("..." if len(last_msg.get("content", "")) > 100 else "")
+                last_timestamp = last_msg.get("timestamp")
+            
+            session_list[session_id] = {
+                "id": session_id,
+                "message_count": len(chat_history),
+                "last_message": last_message,
+                "last_timestamp": last_timestamp,
+                "has_contract": bool(session_data.get("pending_confirmation_product"))
+            }
+        
+        logger.debug(f"Retrieved {len(session_list)} sessions for frontend display")
+        return session_list
+        
+    except Exception as e:
+        logger.error(f"Error retrieving all sessions: {e}", exc_info=True)
+        return {}
+
+def search_chat_history(query: str, session_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Search through chat history across sessions or within a specific session"""
+    try:
+        if not hasattr(sessions, 'keys'):
+            logger.warning("Sessions object does not have keys method. Returning empty list.")
+            return []
+        
+        results = []
+        search_sessions = [session_id] if session_id else list(sessions.keys())
+        
+        for sid in search_sessions:
+            if sid not in sessions:
+                continue
+                
+            chat_history = sessions[sid].get("chat_history", [])
+            for i, message in enumerate(chat_history):
+                content = message.get("content", "").lower()
+                if query.lower() in content:
+                    results.append({
+                        "session_id": sid,
+                        "message_index": i,
+                        "role": message.get("role", "unknown"),
+                        "content": message.get("content", ""),
+                        "timestamp": message.get("timestamp"),
+                        "preview": content[:200] + ("..." if len(content) > 200 else "")
+                    })
+        
+        logger.debug(f"Search for '{query}' found {len(results)} results")
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error searching chat history: {e}", exc_info=True)
+        return []
