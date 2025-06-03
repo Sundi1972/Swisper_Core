@@ -2,54 +2,56 @@ import { useState, useRef } from 'react';
 import SwisperChat from './SwisperChat';
 import ContractViewer from './ContractViewer';
 import LogViewer from './LogViewer';
+import TabBar from './components/ui/TabBar';
+import Header from './components/common/Header';
+import Sidebar from './components/common/Sidebar';
 
 function App() {
   const [activeTab, setActiveTab] = useState('chat');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const chatRef = useRef();
 
-  return (
-    <main className="min-h-screen bg-chat-background text-chat-text p-6">
-      {/* Tab Navigation */}
-      <div className="max-w-xl mx-auto mb-4">
-        <div className="flex border-b border-chat-muted">
-          <button
-            onClick={() => setActiveTab('chat')}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-              activeTab === 'chat'
-                ? 'border-chat-accent text-chat-accent'
-                : 'border-transparent text-chat-secondary hover:text-chat-text'
-            }`}
-          >
-            Chat
-          </button>
-          <button
-            onClick={() => setActiveTab('contracts')}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-              activeTab === 'contracts'
-                ? 'border-chat-accent text-chat-accent'
-                : 'border-transparent text-chat-secondary hover:text-chat-text'
-            }`}
-          >
-            Contracts
-          </button>
-          <button
-            onClick={() => setActiveTab('logs')}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-              activeTab === 'logs'
-                ? 'border-chat-accent text-chat-accent'
-                : 'border-transparent text-chat-secondary hover:text-chat-text'
-            }`}
-          >
-            Logs
-          </button>
-        </div>
-      </div>
+  const tabs = [
+    { id: 'chat', label: 'Chat' },
+    { id: 'contracts', label: 'Contracts' },
+    { id: 'logs', label: 'Logs' }
+  ];
 
-      {/* Tab Content */}
-      {activeTab === 'chat' && <SwisperChat ref={chatRef} />}
-      {activeTab === 'contracts' && <ContractViewer />}
-      {activeTab === 'logs' && <LogViewer />}
-    </main>
+  const handleSearch = (query) => {
+    console.log('Search query:', query);
+  };
+
+  const handleSectionSelect = (section) => {
+    console.log('Section selected:', section);
+  };
+
+  return (
+    <div className="min-h-screen bg-chat-background text-chat-text flex flex-col">
+      <Header onSearch={handleSearch} />
+      
+      <div className="flex flex-1 gap-4 p-4">
+        <Sidebar 
+          onSectionSelect={handleSectionSelect}
+          isCollapsed={sidebarCollapsed}
+        />
+        
+        <main className="flex-1 flex flex-col">
+          <div className="mb-4">
+            <TabBar 
+              tabs={tabs}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+          </div>
+
+          <div className="flex-1">
+            {activeTab === 'chat' && <SwisperChat ref={chatRef} />}
+            {activeTab === 'contracts' && <ContractViewer />}
+            {activeTab === 'logs' && <LogViewer />}
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }
 
