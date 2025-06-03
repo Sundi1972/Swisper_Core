@@ -202,7 +202,7 @@ class ProductFilterComponent(BaseComponent):
                 return {"filtered_products": products}, "output_1"
             
             from contract_engine.llm_helpers import filter_products_with_llm
-            filtered_products = filter_products_with_llm(products, user_preferences)
+            filtered_products = filter_products_with_llm(products, user_preferences, [])
             
             output = {"filtered_products": filtered_products}
             return output, "output_1"

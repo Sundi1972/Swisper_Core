@@ -10,8 +10,8 @@ class SwisperContext(BaseModel):
     
     product_query: Optional[str] = None
     enhanced_query: Optional[str] = None
-    preferences: List[str] = Field(default_factory=list)
-    constraints: Dict[str, Any] = Field(default_factory=dict)
+    preferences: Dict[str, str] = Field(default_factory=dict)
+    constraints: List[str] = Field(default_factory=list)
     must_match_model: Optional[bool] = None
     
     search_results: List[Dict[str, Any]] = Field(default_factory=list)

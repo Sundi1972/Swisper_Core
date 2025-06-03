@@ -121,7 +121,7 @@ def create_mcp_server():
             """Filter products by preferences"""
             try:
                 from contract_engine.llm_helpers import filter_products_with_llm
-                filtered = filter_products_with_llm(products, preferences)
+                filtered = filter_products_with_llm(products, preferences, [])
                 return {
                     "success": True,
                     "filtered_products": filtered,
