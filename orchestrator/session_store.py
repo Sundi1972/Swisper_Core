@@ -70,14 +70,35 @@ def clear_pending_confirmation(session_id: str):
         save_session(session_id)
 
 def set_contract_fsm(session_id: str, fsm):
-    """Store contract FSM state for multi-step interactions"""
+    """Store contract FSM state and context for multi-step interactions"""
     if not hasattr(sessions, '_contract_fsms'):
         sessions._contract_fsms = {}
+    if not hasattr(sessions, '_contract_contexts'):
+        sessions._contract_contexts = {}
+    
     sessions._contract_fsms[session_id] = fsm
-    logger.info(f"Session {session_id}: Stored contract FSM state.")
+    
+    if fsm and hasattr(fsm, 'context'):
+        sessions._contract_contexts[session_id] = fsm.context.to_dict()
+    else:
+        sessions._contract_contexts[session_id] = None
+        
+    logger.info(f"Session {session_id}: Stored contract FSM state and context.")
 
 def get_contract_fsm(session_id: str):
-    """Retrieve stored contract FSM state"""
+    """Retrieve stored contract FSM state and restore context"""
     if hasattr(sessions, '_contract_fsms'):
-        return sessions._contract_fsms.get(session_id)
+        fsm = sessions._contract_fsms.get(session_id)
+        if fsm and hasattr(sessions, '_contract_contexts'):
+            context_data = sessions._contract_contexts.get(session_id)
+            if context_data:
+                from contract_engine.context import SwisperContext
+                fsm.context = SwisperContext.from_dict(context_data)
+        return fsm
+    return None
+
+def get_contract_context(session_id: str):
+    """Retrieve stored contract context as dictionary"""
+    if hasattr(sessions, '_contract_contexts'):
+        return sessions._contract_contexts.get(session_id)
     return None

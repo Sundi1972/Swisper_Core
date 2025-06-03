@@ -94,7 +94,7 @@ export default function ContractViewer() {
   }
 
   return (
-    <div className="max-w-xl mx-auto p-4 space-y-4">
+    <div className="max-w-4xl mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-800">Current Contract</h2>
         <button
@@ -106,19 +106,48 @@ export default function ContractViewer() {
         </button>
       </div>
       
-      <div className="bg-white border border-gray-200 rounded-lg">
-        <div className="p-4 border-b border-gray-200">
-          <div className="text-sm text-gray-600">
-            <strong>State:</strong> {contractData.contract_data?.current_state || 'Unknown'}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg">
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="text-md font-semibold text-gray-800">Contract Data</h3>
+            <div className="text-sm text-gray-600 mt-2">
+              <strong>State:</strong> {contractData.contract_data?.current_state || 'Unknown'}
+            </div>
+            <div className="text-sm text-gray-600 mt-1">
+              <strong>Template:</strong> {contractData.contract_data?.template_path || 'Unknown'}
+            </div>
           </div>
-          <div className="text-sm text-gray-600 mt-1">
-            <strong>Template:</strong> {contractData.contract_data?.template_path || 'Unknown'}
+          
+          <div className="p-4">
+            <JsonDisplay data={contractData.contract_data} />
           </div>
         </div>
-        
-        <div className="p-4">
-          <JsonDisplay data={contractData.contract_data} />
-        </div>
+
+        {contractData.context && (
+          <div className="bg-white border border-gray-200 rounded-lg">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-md font-semibold text-gray-800">SwisperContext</h3>
+              <div className="text-sm text-gray-600 mt-2">
+                <strong>Session:</strong> {contractData.context.session_id}
+              </div>
+              <div className="text-sm text-gray-600 mt-1">
+                <strong>Status:</strong> {contractData.context.contract_status}
+              </div>
+              <div className="text-sm text-gray-600 mt-1">
+                <strong>Created:</strong> {new Date(contractData.context.created_at).toLocaleString()}
+              </div>
+              {contractData.context.updated_at && (
+                <div className="text-sm text-gray-600 mt-1">
+                  <strong>Updated:</strong> {new Date(contractData.context.updated_at).toLocaleString()}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4">
+              <JsonDisplay data={contractData.context} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
