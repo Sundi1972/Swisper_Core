@@ -1,6 +1,9 @@
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { Button } from './components/ui/Button';
 import InputField from './components/ui/InputField';
+import ReactMarkdown from 'react-markdown';
+import rehypeHighlight from 'rehype-highlight';
+import 'highlight.js/styles/github-dark.css';
 
 const SwisperChat = forwardRef((props, ref) => {
   const [messages, setMessages] = useState([
@@ -148,11 +151,43 @@ const SwisperChat = forwardRef((props, ref) => {
                 ? 'bg-[#141923] rounded-lg p-4' 
                 : 'bg-[#222834] rounded-2xl p-4 shadow-[0px_2px_1px_#00000033]'
             }`}>
-              <p className={`text-sm leading-5 mb-2 ${
+              <div className={`text-sm leading-5 mb-2 ${
                 msg.role === 'user' ? 'text-[#f9fbfc]' : 'text-[#f9fbfc]'
-              }`} style={{ whiteSpace: 'pre-line' }}>
-                {msg.content}
-              </p>
+              }`}>
+                {msg.role === 'assistant' ? (
+                  <ReactMarkdown
+                    rehypePlugins={[rehypeHighlight]}
+                    components={{
+                      code: ({inline, className, children, ...props}) => {
+                        return !inline ? (
+                          <pre className="bg-[#1a1a1a] rounded-lg p-3 overflow-x-auto">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </pre>
+                        ) : (
+                          <code className="bg-[#1a1a1a] px-1 py-0.5 rounded text-sm" {...props}>
+                            {children}
+                          </code>
+                        );
+                      },
+                      p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                      ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                      ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                      li: ({children}) => <li className="text-[#f9fbfc]">{children}</li>,
+                      h1: ({children}) => <h1 className="text-lg font-bold mb-2 text-[#f9fbfc]">{children}</h1>,
+                      h2: ({children}) => <h2 className="text-base font-bold mb-2 text-[#f9fbfc]">{children}</h2>,
+                      h3: ({children}) => <h3 className="text-sm font-bold mb-2 text-[#f9fbfc]">{children}</h3>,
+                      strong: ({children}) => <strong className="font-bold text-[#f9fbfc]">{children}</strong>,
+                      em: ({children}) => <em className="italic text-[#f9fbfc]">{children}</em>
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                ) : (
+                  <p style={{ whiteSpace: 'pre-line' }}>{msg.content}</p>
+                )}
+              </div>
             </div>
           </div>
         ))}
