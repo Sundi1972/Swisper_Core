@@ -15,6 +15,7 @@ class SwisperContext(BaseModel):
     must_match_model: Optional[bool] = None
     
     search_results: List[Dict[str, Any]] = Field(default_factory=list)
+    extracted_attributes: List[str] = Field(default_factory=list)
     selected_product: Optional[Dict[str, Any]] = None
     tools_used: List[str] = Field(default_factory=list)
     
@@ -26,7 +27,7 @@ class SwisperContext(BaseModel):
     contract_status: Optional[str] = "active"
     
     contract_template_path: Optional[str] = None
-    contract_template: Optional[Dict[str, Any]] = None
+    contract_template: Optional[str] = None
     contract_version: Optional[str] = "1.0"
     success_criteria: Optional[List[str]] = None
     

@@ -219,21 +219,39 @@ def _fallback_relevance_check(user_response: str, expected_context: str, product
         "detected_intent": "likely relevant to purchase context"
     }
 
-def analyze_product_differences(product_list: list) -> str:
+def analyze_product_differences(product_list: list) -> list:
     prompt = (
-        "Analyze the following product search results and summarize key differences in terms "
-        "of price, brand, cooling system, size, and performance characteristics. "
-        "Return a concise summary that could help a user decide what to prioritize.\n\n"
-        f"{json.dumps(product_list, indent=2)}"
+        "Analyze the following product search results and identify the key differentiating attributes "
+        "that would help a user make a decision. Focus on the most important distinguishing factors.\n\n"
+        f"{json.dumps(product_list, indent=2)}\n\n"
+        "Return a JSON list of the top 5-7 most important attributes that differentiate these products. "
+        "Use simple, clear attribute names like: ['price', 'brand', 'capacity', 'energy_efficiency', 'size', 'features']\n\n"
+        "Return only a valid JSON list of strings. Do not include markdown or explanations."
     )
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        timeout=30
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
+        )
 
-    return response.choices[0].message.content
+        raw_output = response.choices[0].message.content.strip()
+        
+        if raw_output.startswith("```"):
+            raw_output = re.sub(r"^```(?:json)?\s*", "", raw_output)
+            raw_output = re.sub(r"\s*```$", "", raw_output)
+
+        attributes = json.loads(raw_output)
+        
+        if isinstance(attributes, list) and all(isinstance(attr, str) for attr in attributes):
+            return attributes
+        else:
+            return ["price", "brand", "capacity", "energy_efficiency", "size", "features"]
+            
+    except Exception as e:
+        print(f"❌ Failed to analyze product differences: {e}")
+        return ["price", "brand", "capacity", "energy_efficiency", "size", "features"]
 
 def analyze_user_preferences(user_input: str, product_search_results: list) -> dict:
     import logging
@@ -365,10 +383,12 @@ def filter_products_with_llm(product_list: list, preferences: dict, constraints:
         f"The user has the following CONSTRAINTS (qualitative desires): {json.dumps(constraints)}\n\n"
         f"Here are the products to evaluate:\n{json.dumps(product_list, indent=2)}\n\n"
         "Please filter the products based on how well they align with the user's preferences AND constraints. "
-        "CRITICAL: Products MUST meet all preferences (specific requirements) to be included. "
-        "Constraints are used for ranking among products that meet the preferences. "
-        "Pay special attention to preferences like price limits, capacity requirements, energy efficiency ratings, etc. "
-        "Only return products that meet ALL user preferences. "
+        "Be REASONABLE and FLEXIBLE when interpreting user requirements: "
+        "- For price limits like 'below 1400 CHF', include products up to that limit or slightly above if they offer exceptional value "
+        "- For capacity like '6kg', include products with 6kg or higher capacity "
+        "- For energy efficiency like 'B or better', include A+++, A++, A+, A, B rated products "
+        "- If exact specifications aren't available, use reasonable approximations based on product descriptions "
+        "- Aim to return 5-15 products that reasonably match the criteria rather than being overly strict "
         "Return a JSON list of the qualifying products (including all their attributes). "
         "Return only valid JSON. Do not include markdown or explanations. Do not wrap the JSON in triple backticks."
     )
@@ -387,11 +407,17 @@ def filter_products_with_llm(product_list: list, preferences: dict, constraints:
             raw_output = re.sub(r"^```(?:json)?\s*", "", raw_output)
             raw_output = re.sub(r"\s*```$", "", raw_output)
 
-        return json.loads(raw_output)
+        filtered_products = json.loads(raw_output)
+        
+        if len(filtered_products) < 5 and len(product_list) >= 5:
+            print(f"⚠️ Filter returned only {len(filtered_products)} products, using top {min(10, len(product_list))} from original list")
+            return product_list[:10]
+            
+        return filtered_products
 
     except Exception as e:
         print("❌ Failed to filter products:", str(e))
-        return []
+        return product_list[:10]
 
 def generate_product_recommendation(products: list, user_preferences: list, user_constraints: dict) -> dict:
     """

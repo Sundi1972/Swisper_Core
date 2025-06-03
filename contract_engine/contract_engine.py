@@ -39,7 +39,7 @@ class ContractStateMachine:
         self.context = SwisperContext(
             session_id="default_fsm_session",
             contract_template_path=template_path,
-            contract_template=self.contract
+            contract_template=template_path
         )
         
         # Ensure session_id is initialized if possible, or by orchestrator via fill_parameters
@@ -119,31 +119,55 @@ class ContractStateMachine:
             
             threshold = parameters.get("product_threshold", 10)
             if len(results) > threshold:
-                self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products (>{threshold}). Transition: search → analyze_attributes")
-                self.context.update_state("analyze_attributes")
+                self.logger.info(f"📊 FSM (session: {session_id}): Found {len(results)} products (>{threshold}). Analyzing attributes...")
+                
+                try:
+                    from contract_engine.llm_helpers import analyze_product_differences
+                    attributes = analyze_product_differences(results)
+                    self.context.extracted_attributes = attributes
+                    self.contract["parameters"]["extracted_attributes"] = attributes
+                    
+                    self.logger.info(f"🔍 FSM (session: {session_id}): Results and Attributes extracted: {attributes}")
+                    self.logger.info(f"🔄 FSM (session: {session_id}): Transition: search → analyze_attributes")
+                    self.context.update_state("analyze_attributes")
+                except Exception as e:
+                    self.logger.error(f"❌ FSM (session: {session_id}): Attribute analysis failed: {e}")
+                    self.logger.info(f"🔄 FSM (session: {session_id}): Fallback transition: search → wait_for_preferences")
+                    self.context.update_state("wait_for_preferences")
+                    return {"ask_user": "I found several options. To help you choose the best one, could you provide more criteria? For example: price range, capacity, energy rating, or any specific requirements you have. Or type 'cancel' to exit this purchase."}
             else:
-                self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products (<={threshold}). Transition: search → wait_for_preferences")
-                self.context.update_state("wait_for_preferences")
-                return {"ask_user": "I found several options. To help you choose the best one, could you provide more criteria? For example: price range, capacity, energy rating, or any specific requirements you have. Or type 'cancel' to exit this purchase."}
+                self.logger.info(f"📊 FSM (session: {session_id}): Found {len(results)} products (<={threshold}). Picking best five immediately...")
+                self.logger.info(f"🔄 FSM (session: {session_id}): Transition: search → rank_and_select")
+                self.context.update_state("rank_and_select")
             return self.next()
 
         elif self.context.current_state == "analyze_attributes":
+            session_id = self.contract.get("parameters", {}).get("session_id", "unknown")
+            self.logger.info(f"🔍 FSM (session: {session_id}): In analyze_attributes state")
+            
             try:
-                from contract_engine.llm_helpers import analyze_product_differences
-                analysis = analyze_product_differences(self.context.search_results)
+                attributes = self.context.extracted_attributes or []
                 
-                attributes = self._extract_attributes_from_analysis(analysis, self.context.product_query)
+                if not self.context.search_results:
+                    self.logger.error(f"❌ FSM (session: {session_id}): No search results available for attribute analysis")
+                    return {"ask_user": "No products found to analyze. Please try a different search."}
+                
+                self.logger.info(f"📊 FSM (session: {session_id}): Showing attributes to user")
+                self.logger.info(f"📋 FSM (session: {session_id}): Found {len(self.context.search_results)} products")
+                self.logger.info(f"🔍 FSM (session: {session_id}): Key attributes: {attributes}")
+                
                 self.contract["parameters"]["extracted_attributes"] = attributes
                 
-                self.logger.info(f"FSM (session: {session_id}): Extracted attributes: {attributes}. Transition: analyze_attributes → ask_clarification")
+                self.logger.info(f"🔄 FSM (session: {session_id}): Transition: analyze_attributes → ask_clarification")
                 self.context.update_state("ask_clarification")
                 return self.next()
             except Exception as e:
-                self.logger.error(f"FSM (session: {session_id}): Error in analyze_attributes: {e}")
+                self.logger.error(f"❌ FSM (session: {session_id}): Error in analyze_attributes: {e}")
                 self.context.update_state("rank_and_select")
                 return self.next()
 
         elif self.context.current_state == "ask_clarification":
+            session_id = self.contract.get("parameters", {}).get("session_id", "unknown")
             extracted_attributes = self.contract["parameters"].get("extracted_attributes", [])
             
             attribute_examples = ", ".join(extracted_attributes[:3]) if extracted_attributes else "brand, price range, features"
@@ -154,11 +178,14 @@ class ContractStateMachine:
                 f"Or type 'cancel' to exit this purchase."
             )
             
-            self.logger.info(f"FSM (session: {session_id}): Asking for clarification. Transition: ask_clarification → wait_for_preferences")
+            self.logger.info(f"🔄 FSM (session: {session_id}): Transition: ask_clarification → wait_for_preferences")
             self.context.update_state("wait_for_preferences")
             return {"ask_user": clarification_message}
 
         elif self.context.current_state == "wait_for_preferences":
+            session_id = self.contract.get("parameters", {}).get("session_id", "unknown")
+            self.logger.info(f"🎯 FSM (session: {session_id}): Processing user preferences: '{user_input}'")
+            
             if not user_input:
                 return {"ask_user": "Please provide your preferences to help me filter the products."}
             
@@ -166,9 +193,53 @@ class ContractStateMachine:
                 from contract_engine.llm_helpers import analyze_user_preferences, is_cancel_request, is_response_relevant
                 
                 if is_cancel_request(user_input):
+                    self.logger.info(f"❌ FSM (session: {session_id}): User cancelled the purchase")
                     self.context.update_state("cancelled")
                     self.context.is_cancelled = True
                     return {"ask_user": "Purchase cancelled. Is there anything else I can help you with?"}
+                
+                if (user_input and user_input.strip().isdigit() and 
+                    hasattr(self.context, 'product_recommendations') and 
+                    self.context.product_recommendations):
+                    
+                    choice_number = int(user_input.strip())
+                    top_products = getattr(self.context, 'top_products', [])
+                    
+                    if 1 <= choice_number <= len(top_products):
+                        self.logger.info(f"✅ FSM (session: {session_id}): User selected product {choice_number} from recommendations")
+                        selected_product = top_products[choice_number - 1]
+                        self.context.selected_product = selected_product
+                        
+                        product_name = selected_product.get("name", "this product")
+                        product_price = selected_product.get("price")
+                        price_info = f" at {product_price} CHF" if product_price is not None else ""
+                        
+                        self.logger.info(f"✅ FSM (session: {session_id}): Product selected: {product_name}. Transition: wait_for_preferences → confirm_order")
+                        self.context.update_state("confirm_order")
+                        self.context.confirmation_pending = True
+                        
+                        return {"ask_user": f"You selected: {product_name}{price_info}. Shall I go ahead and confirm this order?"}
+                    else:
+                        return {
+                            "ask_user": f"Please enter a number between 1 and {len(top_products)}, or provide more criteria to help me filter the products."
+                        }
+                
+                confirmation_keywords = ["yes", "y", "ok", "okay", "sure"]
+                if user_input and user_input.lower().strip() in confirmation_keywords:
+                    self.logger.info(f"🔍 FSM (session: {session_id}): User input '{user_input}' looks like confirmation, but FSM is in wait_for_preferences state")
+                    return {
+                        "ask_user": f"I'm still waiting for your preferences for {self.context.product_query or 'the product'}. "
+                                   f"Could you please provide criteria like brand, price range, capacity, energy efficiency, or features? "
+                                   f"Or type 'cancel' to exit this purchase."
+                    }
+                
+                if user_input and user_input.strip().isdigit():
+                    choice_number = int(user_input.strip())
+                    if 1 <= choice_number <= 5:  # Assume max 5 products were shown
+                        self.logger.info(f"🔢 FSM (session: {session_id}): User provided numeric selection '{choice_number}' - treating as product selection")
+                        self.logger.info(f"🔄 FSM (session: {session_id}): Transition: wait_for_preferences → rank_and_select")
+                        self.context.update_state("rank_and_select")
+                        return self.next(user_input)
                 
                 relevance_check = is_response_relevant(
                     user_input, 
@@ -176,7 +247,10 @@ class ContractStateMachine:
                     self.context.product_query or "product"
                 )
                 
+                self.logger.info(f"🔍 FSM (session: {session_id}): OOC result: {not relevance_check.get('is_relevant', True)}")
+                
                 if not relevance_check.get("is_relevant", True):
+                    self.logger.info(f"⚠️ FSM (session: {session_id}): Out of context response detected")
                     return {
                         "ask_user": f"I didn't understand your response in the context of finding {self.context.product_query or 'product'}. "
                                    f"Could you please provide criteria like brand, price range, or features? "
@@ -187,54 +261,62 @@ class ContractStateMachine:
                 
                 preferences = preferences_data.get("preferences", {})
                 if not isinstance(preferences, dict):
-                    self.logger.warning(f"⚠️ Invalid preferences type: {type(preferences)}, converting to dict")
+                    self.logger.warning(f"⚠️ FSM (session: {session_id}): Invalid preferences type: {type(preferences)}, converting to dict")
                     preferences = {}
                 self.context.preferences = preferences
                 
                 constraints = preferences_data.get("constraints", [])
                 if not isinstance(constraints, list):
-                    self.logger.warning(f"⚠️ Invalid constraints type: {type(constraints)}, converting to list")
+                    self.logger.warning(f"⚠️ FSM (session: {session_id}): Invalid constraints type: {type(constraints)}, converting to list")
                     constraints = []
                 self.context.constraints = constraints
                 self.contract["parameters"]["preferences"] = self.context.preferences
                 self.contract["parameters"]["constraints"] = self.context.constraints
                 
-                self.logger.info(f"FSM (session: {session_id}): Stored preferences: {self.context.preferences}")
-                self.logger.info(f"FSM (session: {session_id}): Stored constraints: {self.context.constraints}")
-                self.logger.info(f"FSM (session: {session_id}): Contract parameters updated with preferences and constraints")
+                self.logger.info(f"📋 FSM (session: {session_id}): Identified constraints: {self.context.constraints}")
+                self.logger.info(f"📋 FSM (session: {session_id}): Identified preferences: {self.context.preferences}")
                 
                 has_compatibility = any(keyword in user_input.lower() for keyword in ["compatible", "compatibility", "works with", "fits"])
                 has_compatibility_constraint = any("compatible" in str(constraint).lower() for constraint in self.context.constraints)
                 
                 if has_compatibility and (self.context.constraints or has_compatibility_constraint):
-                    self.logger.info(f"FSM (session: {session_id}): Compatibility requirements detected. Transition: wait_for_preferences → check_compatibility")
+                    self.logger.info(f"🔍 FSM (session: {session_id}): Compatibility check: y")
+                    self.logger.info(f"🔄 FSM (session: {session_id}): Transition: wait_for_preferences → check_compatibility")
                     self.context.update_state("check_compatibility")
                 else:
-                    self.logger.info(f"FSM (session: {session_id}): No compatibility requirements. Transition: wait_for_preferences → filter_products")
+                    self.logger.info(f"🔍 FSM (session: {session_id}): Compatibility check: n")
+                    self.logger.info(f"🔄 FSM (session: {session_id}): Transition: wait_for_preferences → filter_products")
                     self.context.update_state("filter_products")
                 return self.next()
             except Exception as e:
-                self.logger.error(f"FSM (session: {session_id}): Error analyzing preferences: {e}")
+                self.logger.error(f"❌ FSM (session: {session_id}): Error analyzing preferences: {e}")
                 self.context.update_state("rank_and_select")
                 return self.next()
 
         elif self.context.current_state == "filter_products":
+            session_id = self.contract.get("parameters", {}).get("session_id", "unknown")
+            self.logger.info(f"🔍 FSM (session: {session_id}): Filtering products with LLM")
+            
             try:
                 from contract_engine.llm_helpers import filter_products_with_llm
                 
                 if self.context.preferences or self.context.constraints:
+                    self.logger.info(f"📊 FSM (session: {session_id}): Filtering {len(self.context.search_results)} products using preferences and constraints")
                     filtered_products = filter_products_with_llm(
                         self.context.search_results, 
                         self.context.preferences,
                         self.context.constraints
                     )
                     self.context.search_results = filtered_products
+                    self.logger.info(f"📋 FSM (session: {session_id}): Filtered list: {len(filtered_products)} products remaining")
+                else:
+                    self.logger.info(f"⚠️ FSM (session: {session_id}): No preferences or constraints to filter with")
                 
-                self.logger.info(f"FSM (session: {session_id}): Filtered to {len(self.context.search_results)} products. Transition: filter_products → rank_and_select")
+                self.logger.info(f"🔄 FSM (session: {session_id}): Transition: filter_products → rank_and_select")
                 self.context.update_state("rank_and_select")
                 return self.next()
             except Exception as e:
-                self.logger.error(f"FSM (session: {session_id}): Error filtering products: {e}")
+                self.logger.error(f"❌ FSM (session: {session_id}): Error filtering products: {e}")
                 self.context.update_state("rank_and_select")
                 return self.next()
 
@@ -266,10 +348,16 @@ class ContractStateMachine:
                 return self.next()
 
         elif self.context.current_state == "rank_and_select":
+            session_id = self.contract.get("parameters", {}).get("session_id", "unknown")
+            self.logger.info(f"🏆 FSM (session: {session_id}): In rank_and_select state")
+            
             top_products = self.rank_and_select(self.context.search_results, self.context.preferences)
             
             if not top_products:
+                self.logger.error(f"❌ FSM (session: {session_id}): No products to rank and select")
                 return {"ask_user": "No suitable products were found. Would you like to try a different search?"}
+            
+            self.logger.info(f"🏆 FSM (session: {session_id}): Ranking {len(top_products)} products")
             
             from contract_engine.llm_helpers import generate_product_recommendation
             recommendation_data = generate_product_recommendation(
@@ -290,7 +378,8 @@ class ContractStateMachine:
             recommended_choice = recommendation.get("choice", 1)
             reasoning = recommendation.get("reasoning", "Best overall value")
             
-            self.logger.info(f"FSM (session: {session_id}): Generated top 5 recommendations. Transition: rank_and_select → confirm_selection")
+            self.logger.info(f"🏆 FSM (session: {session_id}): Generated top {len(top_products)} recommendations")
+            self.logger.info(f"🔄 FSM (session: {session_id}): Transition: rank_and_select → confirm_selection")
             self.context.update_state("confirm_selection")
             
             num_products = len(top_products)
@@ -302,7 +391,8 @@ class ContractStateMachine:
             }
 
         elif self.context.current_state == "confirm_selection":
-            self.logger.info(f"FSM (session: {session_id}): In confirm_selection, user_input: '{user_input}'")
+            session_id = self.contract.get("parameters", {}).get("session_id", "unknown")
+            self.logger.info(f"✅ FSM (session: {session_id}): In confirm_selection state, user_input: '{user_input}'")
             
             try:
                 from contract_engine.llm_helpers import is_cancel_request
