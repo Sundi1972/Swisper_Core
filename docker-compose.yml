@@ -23,6 +23,7 @@ services:
     working_dir: /app
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}           # From your .env file
+      - SEARCHAPI_API_KEY=${SEARCHAPI_API_KEY}     # From your .env file
       - LOG_LEVEL=INFO
       - PYTHONPATH=/app
     command: uvicorn gateway.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app
