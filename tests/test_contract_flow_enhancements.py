@@ -303,3 +303,149 @@ class TestContractFlowEnhancements:
         
         result = fsm.next("-1")
         assert "I didn't understand your selection" in result["ask_user"]
+
+    def test_washing_machine_constraint_extraction(self):
+        """Test constraint extraction for washing machine specific requirements"""
+        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm.fill_parameters({"product": "washing machine", "session_id": "test"})
+        
+        mock_washing_machines = [
+            {"name": "Bosch WAJ28008", "price": 599, "energy_efficiency": "A", "capacity": "7kg"},
+            {"name": "Samsung WW80", "price": 899, "energy_efficiency": "B", "capacity": "8kg"}
+        ]
+        
+        with patch('contract_engine.llm_helpers.analyze_user_preferences') as mock_analyze, \
+             patch('contract_engine.llm_helpers.filter_products_with_llm') as mock_filter:
+            
+            mock_analyze.return_value = {
+                "preferences": ["energy efficient", "large capacity", "budget-friendly"],
+                "constraints": {
+                    "price": "below 1600 CHF",
+                    "energy_efficiency": "B or better", 
+                    "capacity": "at least 6kg"
+                }
+            }
+            
+            mock_filter.return_value = mock_washing_machines
+            
+            fsm.context.search_results = mock_washing_machines
+            
+            fsm.context.update_state("wait_for_preferences")
+            result = fsm.next("Price should be below 1600 chf it should be energy efficient below B, and it should take at least 6kg of laundry")
+            
+            assert "energy efficient" in fsm.context.preferences
+            assert "large capacity" in fsm.context.preferences
+            assert fsm.context.constraints["price"] == "below 1600 CHF"
+            assert fsm.context.constraints["energy_efficiency"] == "B or better"
+            assert fsm.context.constraints["capacity"] == "at least 6kg"
+            assert fsm.context.current_state == "confirm_selection"
+
+    @patch('contract_engine.llm_helpers.client')
+    def test_preference_extraction_with_real_llm_response(self, mock_client):
+        """Test preference extraction with realistic LLM responses"""
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = '''
+        {
+            "preferences": ["energy efficient", "large capacity", "quiet operation"],
+            "constraints": {
+                "price": "below 1600 CHF",
+                "energy_efficiency": "B or better",
+                "capacity": "at least 6kg"
+            }
+        }
+        '''
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        from contract_engine.llm_helpers import analyze_user_preferences
+        
+        result = analyze_user_preferences(
+            "Price should be below 1600 chf it should be energy efficient below B, and it should take at least 6kg of laundry",
+            [{"name": "Test Washer", "price": 500}]
+        )
+        
+        assert len(result["preferences"]) == 3
+        assert "energy efficient" in result["preferences"]
+        assert result["constraints"]["price"] == "below 1600 CHF"
+        assert result["constraints"]["energy_efficiency"] == "B or better"
+        assert result["constraints"]["capacity"] == "at least 6kg"
+
+    @patch('contract_engine.llm_helpers.client')
+    def test_preference_extraction_json_parsing_errors(self, mock_client):
+        """Test handling of malformed JSON responses"""
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = '''
+        {
+            "preferences": ["energy efficient", "large capacity"
+            "constraints": {
+                "price": "below 1600 CHF"
+            }
+        '''
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        from contract_engine.llm_helpers import analyze_user_preferences
+        
+        result = analyze_user_preferences(
+            "Price should be below 1600 chf",
+            [{"name": "Test Washer", "price": 500}]
+        )
+        
+        assert result["preferences"] == []
+        assert result["constraints"] == {}
+
+    @patch('contract_engine.llm_helpers.client')
+    def test_preference_extraction_with_markdown_formatting(self, mock_client):
+        """Test handling of LLM responses with markdown formatting"""
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = '''```json
+        {
+            "preferences": ["high performance", "quiet"],
+            "constraints": {
+                "budget": "under $2000",
+                "size": "fits in mid-tower"
+            }
+        }
+        ```'''
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        from contract_engine.llm_helpers import analyze_user_preferences
+        
+        result = analyze_user_preferences(
+            "I want a high performance GPU under $2000 that's quiet",
+            [{"name": "RTX 4090", "price": 1599}]
+        )
+        
+        assert len(result["preferences"]) == 2
+        assert "high performance" in result["preferences"]
+        assert result["constraints"]["budget"] == "under $2000"
+
+    @patch('contract_engine.llm_helpers.client')
+    def test_preference_extraction_api_timeout(self, mock_client):
+        """Test handling of API timeouts and errors"""
+        mock_client.chat.completions.create.side_effect = Exception("API timeout")
+        
+        from contract_engine.llm_helpers import analyze_user_preferences
+        
+        result = analyze_user_preferences(
+            "I want a laptop under $1500",
+            [{"name": "MacBook Air", "price": 1299}]
+        )
+        
+        assert result["preferences"] == []
+        assert result["constraints"] == {}
+
+    def test_preference_extraction_data_validation(self):
+        """Test validation of extracted preference data structure"""
+        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm.fill_parameters({"product": "laptop", "session_id": "test"})
+        
+        with patch('contract_engine.llm_helpers.analyze_user_preferences') as mock_analyze:
+            mock_analyze.return_value = {
+                "preferences": "not a list",
+                "constraints": ["not", "a", "dict"]
+            }
+            
+            fsm.context.update_state("wait_for_preferences")
+            result = fsm.next("I need a laptop")
+            
+            assert isinstance(fsm.context.preferences, list)
+            assert isinstance(fsm.context.constraints, dict)
