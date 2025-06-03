@@ -6,7 +6,7 @@ import asyncio
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Any, Dict # Added Dict here
+from typing import List, Any, Dict, Optional # Added Dict here
 
 # CORS middleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -310,3 +310,57 @@ async def get_current_contract(session_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Error retrieving contract for session %s: %s", session_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error retrieving contract: {str(e)}") from e
+
+@app.get("/api/sessions")
+async def get_sessions() -> Dict[str, Any]:
+    """Get all sessions with metadata for frontend display"""
+    logger.info("Received request for GET /api/sessions")
+    try:
+        from orchestrator.session_store import get_all_sessions
+        
+        sessions_data = get_all_sessions()
+        return {
+            "sessions": sessions_data,
+            "total": len(sessions_data)
+        }
+        
+    except Exception as e:
+        logger.error("Error retrieving sessions: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error retrieving sessions: {str(e)}") from e
+
+@app.get("/api/sessions/{session_id}/history")
+async def get_session_history(session_id: str) -> Dict[str, Any]:
+    """Get chat history for a specific session"""
+    logger.info("Received request for GET /api/sessions/%s/history", session_id)
+    try:
+        from orchestrator.session_store import get_chat_history
+        
+        history = get_chat_history(session_id)
+        return {
+            "session_id": session_id,
+            "history": history,
+            "message_count": len(history)
+        }
+        
+    except Exception as e:
+        logger.error("Error retrieving session history for %s: %s", session_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error retrieving session history: {str(e)}") from e
+
+@app.get("/api/search")
+async def search_chat_history(query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+    """Search through chat history across sessions or within a specific session"""
+    logger.info("Received request for GET /api/search with query: %s, session_id: %s", query, session_id)
+    try:
+        from orchestrator.session_store import search_chat_history
+        
+        results = search_chat_history(query, session_id)
+        return {
+            "query": query,
+            "session_id": session_id,
+            "results": results,
+            "total": len(results)
+        }
+        
+    except Exception as e:
+        logger.error("Error searching chat history: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error searching chat history: {str(e)}") from e

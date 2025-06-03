@@ -25,13 +25,26 @@ function App() {
     console.log('Section selected:', section);
   };
 
+  const handleSessionSelect = (sessionId) => {
+    console.log('Session selected:', sessionId);
+  };
+
+  const handleSearchResultSelect = (sessionId, messageIndex) => {
+    console.log('Search result selected:', sessionId, messageIndex);
+  };
+
   return (
     <div className="min-h-screen bg-chat-background text-chat-text flex flex-col">
-      <Header onSearch={handleSearch} />
+      <Header 
+        onSearch={handleSearch}
+        onSearchResultSelect={handleSearchResultSelect}
+      />
       
       <div className="flex flex-1 gap-4 p-4">
         <Sidebar 
           onSectionSelect={handleSectionSelect}
+          onSessionSelect={handleSessionSelect}
+          currentSessionId="default_session"
           isCollapsed={sidebarCollapsed}
         />
         
