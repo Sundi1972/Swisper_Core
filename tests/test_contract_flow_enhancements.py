@@ -11,17 +11,17 @@ class TestContractFlowEnhancements:
         
         with patch('contract_engine.llm_helpers.analyze_user_preferences') as mock_analyze:
             mock_analyze.return_value = {
-                "preferences": ["high performance", "quiet operation"],
-                "constraints": {"budget": "under $2000", "size": "fits in mid-tower"}
+                "preferences": {"budget": "under $2000", "size": "fits in mid-tower"},
+                "constraints": ["high performance", "quiet operation"]
             }
             
             fsm.context.update_state("wait_for_preferences")
             result = fsm.next("I want a high performance GPU under $2000 that's quiet")
             
-            assert fsm.context.preferences == ["high performance", "quiet operation"]
-            assert fsm.context.constraints == {"budget": "under $2000", "size": "fits in mid-tower"}
-            assert fsm.contract["parameters"]["preferences"] == ["high performance", "quiet operation"]
-            assert fsm.contract["parameters"]["constraints"] == {"budget": "under $2000", "size": "fits in mid-tower"}
+            assert fsm.context.preferences == {"budget": "under $2000", "size": "fits in mid-tower"}
+            assert fsm.context.constraints == ["high performance", "quiet operation"]
+            assert fsm.contract["parameters"]["preferences"] == {"budget": "under $2000", "size": "fits in mid-tower"}
+            assert fsm.contract["parameters"]["constraints"] == ["high performance", "quiet operation"]
 
     @patch('contract_engine.llm_helpers.client')
     def test_llm_recommendation_generation(self, mock_client):
@@ -48,8 +48,8 @@ class TestContractFlowEnhancements:
         
         result = generate_product_recommendation(
             products, 
-            ["high performance"], 
-            {"budget": "under $2000"}
+            {"budget": "under $2000"}, 
+            ["high performance"]
         )
         
         assert len(result["numbered_products"]) == 2
@@ -143,8 +143,8 @@ class TestContractFlowEnhancements:
         ]
         
         mock_analyze.return_value = {
-            "preferences": ["high performance"],
-            "constraints": {"budget": "under $2000"}
+            "preferences": {"budget": "under $2000"},
+            "constraints": ["high performance"]
         }
         
         mock_recommend.return_value = {
@@ -201,8 +201,8 @@ class TestContractFlowEnhancements:
         
         with patch('contract_engine.llm_helpers.analyze_user_preferences') as mock_analyze:
             mock_analyze.return_value = {
-                "preferences": ["lightweight", "long battery life", "fast processor"],
-                "constraints": {"budget": "under $1500", "screen_size": "13-15 inches", "weight": "under 3 lbs"}
+                "preferences": {"budget": "under $1500", "screen_size": "13-15 inches", "weight": "under 3 lbs"},
+                "constraints": ["lightweight", "long battery life", "fast processor"]
             }
             
             fsm.context.update_state("wait_for_preferences")
@@ -211,12 +211,12 @@ class TestContractFlowEnhancements:
             contract_prefs = fsm.contract["parameters"]["preferences"]
             contract_constraints = fsm.contract["parameters"]["constraints"]
             
-            assert "lightweight" in contract_prefs
-            assert "long battery life" in contract_prefs
-            assert "fast processor" in contract_prefs
-            assert contract_constraints["budget"] == "under $1500"
-            assert contract_constraints["screen_size"] == "13-15 inches"
-            assert contract_constraints["weight"] == "under 3 lbs"
+            assert "lightweight" in contract_constraints
+            assert "long battery life" in contract_constraints
+            assert "fast processor" in contract_constraints
+            assert contract_prefs["budget"] == "under $1500"
+            assert contract_prefs["screen_size"] == "13-15 inches"
+            assert contract_prefs["weight"] == "under 3 lbs"
 
     def test_fewer_than_5_products_handling(self):
         """Test handling when search returns fewer than 5 products"""
@@ -318,12 +318,12 @@ class TestContractFlowEnhancements:
              patch('contract_engine.llm_helpers.filter_products_with_llm') as mock_filter:
             
             mock_analyze.return_value = {
-                "preferences": ["energy efficient", "large capacity", "budget-friendly"],
-                "constraints": {
+                "preferences": {
                     "price": "below 1600 CHF",
                     "energy_efficiency": "B or better", 
                     "capacity": "at least 6kg"
-                }
+                },
+                "constraints": ["energy efficient", "large capacity", "budget-friendly"]
             }
             
             mock_filter.return_value = mock_washing_machines
@@ -333,11 +333,11 @@ class TestContractFlowEnhancements:
             fsm.context.update_state("wait_for_preferences")
             result = fsm.next("Price should be below 1600 chf it should be energy efficient below B, and it should take at least 6kg of laundry")
             
-            assert "energy efficient" in fsm.context.preferences
-            assert "large capacity" in fsm.context.preferences
-            assert fsm.context.constraints["price"] == "below 1600 CHF"
-            assert fsm.context.constraints["energy_efficiency"] == "B or better"
-            assert fsm.context.constraints["capacity"] == "at least 6kg"
+            assert "energy efficient" in fsm.context.constraints
+            assert "large capacity" in fsm.context.constraints
+            assert fsm.context.preferences["price"] == "below 1600 CHF"
+            assert fsm.context.preferences["energy_efficiency"] == "B or better"
+            assert fsm.context.preferences["capacity"] == "at least 6kg"
             assert fsm.context.current_state == "confirm_selection"
 
     @patch('contract_engine.llm_helpers.client')
@@ -346,12 +346,12 @@ class TestContractFlowEnhancements:
         mock_response = MagicMock()
         mock_response.choices[0].message.content = '''
         {
-            "preferences": ["energy efficient", "large capacity", "quiet operation"],
-            "constraints": {
+            "preferences": {
                 "price": "below 1600 CHF",
                 "energy_efficiency": "B or better",
                 "capacity": "at least 6kg"
-            }
+            },
+            "constraints": ["energy efficient", "large capacity", "quiet operation"]
         }
         '''
         mock_client.chat.completions.create.return_value = mock_response
@@ -364,10 +364,10 @@ class TestContractFlowEnhancements:
         )
         
         assert len(result["preferences"]) == 3
-        assert "energy efficient" in result["preferences"]
-        assert result["constraints"]["price"] == "below 1600 CHF"
-        assert result["constraints"]["energy_efficiency"] == "B or better"
-        assert result["constraints"]["capacity"] == "at least 6kg"
+        assert "energy efficient" in result["constraints"]
+        assert result["preferences"]["price"] == "below 1600 CHF"
+        assert result["preferences"]["energy_efficiency"] == "B or better"
+        assert result["preferences"]["capacity"] == "at least 6kg"
 
     @patch('contract_engine.llm_helpers.client')
     def test_preference_extraction_json_parsing_errors(self, mock_client):
@@ -389,8 +389,8 @@ class TestContractFlowEnhancements:
             [{"name": "Test Washer", "price": 500}]
         )
         
-        assert result["preferences"] == []
-        assert result["constraints"] == {}
+        assert result["preferences"] == {}
+        assert result["constraints"] == []
 
     @patch('contract_engine.llm_helpers.client')
     def test_preference_extraction_with_markdown_formatting(self, mock_client):
@@ -398,11 +398,11 @@ class TestContractFlowEnhancements:
         mock_response = MagicMock()
         mock_response.choices[0].message.content = '''```json
         {
-            "preferences": ["high performance", "quiet"],
-            "constraints": {
+            "preferences": {
                 "budget": "under $2000",
                 "size": "fits in mid-tower"
-            }
+            },
+            "constraints": ["high performance", "quiet"]
         }
         ```'''
         mock_client.chat.completions.create.return_value = mock_response
@@ -415,8 +415,8 @@ class TestContractFlowEnhancements:
         )
         
         assert len(result["preferences"]) == 2
-        assert "high performance" in result["preferences"]
-        assert result["constraints"]["budget"] == "under $2000"
+        assert "high performance" in result["constraints"]
+        assert result["preferences"]["budget"] == "under $2000"
 
     @patch('contract_engine.llm_helpers.client')
     def test_preference_extraction_api_timeout(self, mock_client):
@@ -430,8 +430,8 @@ class TestContractFlowEnhancements:
             [{"name": "MacBook Air", "price": 1299}]
         )
         
-        assert result["preferences"] == []
-        assert result["constraints"] == {}
+        assert result["preferences"] == {}
+        assert result["constraints"] == []
 
     def test_preference_extraction_data_validation(self):
         """Test validation of extracted preference data structure"""
@@ -440,12 +440,12 @@ class TestContractFlowEnhancements:
         
         with patch('contract_engine.llm_helpers.analyze_user_preferences') as mock_analyze:
             mock_analyze.return_value = {
-                "preferences": "not a list",
-                "constraints": ["not", "a", "dict"]
+                "preferences": "not a dict",
+                "constraints": "not a list"
             }
             
             fsm.context.update_state("wait_for_preferences")
             result = fsm.next("I need a laptop")
             
-            assert isinstance(fsm.context.preferences, list)
-            assert isinstance(fsm.context.constraints, dict)
+            assert isinstance(fsm.context.preferences, dict)
+            assert isinstance(fsm.context.constraints, list)

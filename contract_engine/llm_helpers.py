@@ -250,9 +250,13 @@ def analyze_user_preferences(user_input: str, product_search_results: list) -> d
         "Here is a representative sample of available products:\n"
         f"{json.dumps(product_search_results, indent=2)}\n\n"
         "Please extract:\n"
-        "1. PREFERENCES: General user preferences as a list (e.g., ['energy efficient', 'quiet operation', 'high performance'])\n"
-        "2. CONSTRAINTS: Specific technical requirements as a dictionary with clear keys and values\n\n"
-        "For constraints, use these key patterns:\n"
+        "1. PREFERENCES: Specific measurable requirements as key-value pairs for filtering\n"
+        "   - These are quantifiable limits or technical specifications\n"
+        "   - Examples: price limits, capacity requirements, size constraints, energy efficiency ratings\n\n"
+        "2. CONSTRAINTS: Complex qualitative requirements as a list\n"
+        "   - These are general desires or complex requirements\n"
+        "   - Examples: 'quiet operation', 'energy efficient', 'reliable brand', 'compatible with product X'\n\n"
+        "For preferences (key-value pairs), use these patterns:\n"
         "- price: 'below X CHF' or 'under X' or 'max X'\n"
         "- capacity: 'at least Xkg' or 'minimum X liters' or 'Xkg or more'\n"
         "- energy_efficiency: 'A or better' or 'minimum B' or 'B or higher'\n"
@@ -262,8 +266,8 @@ def analyze_user_preferences(user_input: str, product_search_results: list) -> d
         "- weight: 'under X lbs' or 'lightweight'\n\n"
         "Return a JSON object with exactly these two keys:\n"
         "{\n"
-        "  \"preferences\": [\"list of general preferences\"],\n"
-        "  \"constraints\": {\"key\": \"specific requirement value\"}\n"
+        "  \"preferences\": {\"key\": \"specific requirement value\"},\n"
+        "  \"constraints\": [\"list of qualitative requirements\"]\n"
         "}\n\n"
         "Return only valid JSON. Do not include markdown or explanations."
     )
@@ -290,12 +294,12 @@ def analyze_user_preferences(user_input: str, product_search_results: list) -> d
         logger.info("🔧 Parsing JSON response...")
         parsed_result = json.loads(raw_output)
         
-        if not isinstance(parsed_result.get("preferences"), list):
-            logger.warning(f"⚠️ Invalid preferences type: {type(parsed_result.get('preferences'))}, converting to list")
-            parsed_result["preferences"] = []
-        if not isinstance(parsed_result.get("constraints"), dict):
-            logger.warning(f"⚠️ Invalid constraints type: {type(parsed_result.get('constraints'))}, converting to dict")
-            parsed_result["constraints"] = {}
+        if not isinstance(parsed_result.get("preferences"), dict):
+            logger.warning(f"⚠️ Invalid preferences type: {type(parsed_result.get('preferences'))}, converting to dict")
+            parsed_result["preferences"] = {}
+        if not isinstance(parsed_result.get("constraints"), list):
+            logger.warning(f"⚠️ Invalid constraints type: {type(parsed_result.get('constraints'))}, converting to list")
+            parsed_result["constraints"] = []
             
         logger.info(f"✅ Successfully extracted {len(parsed_result['preferences'])} preferences")
         logger.info(f"✅ Successfully extracted {len(parsed_result['constraints'])} constraints")
@@ -308,13 +312,13 @@ def analyze_user_preferences(user_input: str, product_search_results: list) -> d
         logger.error(f"❌ JSON parsing failed: {e}")
         logger.error(f"🔍 Raw output that failed to parse: '{raw_output}'")
         logger.error(f"🔍 Error position: line {e.lineno}, column {e.colno}")
-        return {"preferences": [], "constraints": {}}
+        return {"preferences": {}, "constraints": []}
     except Exception as e:
         logger.error(f"❌ Failed to analyze preferences: {str(e)}")
         logger.error(f"🔍 Exception type: {type(e).__name__}")
         import traceback
         logger.error(f"🔍 Full traceback: {traceback.format_exc()}")
-        return {"preferences": [], "constraints": {}}
+        return {"preferences": {}, "constraints": []}
 
 def check_product_compatibility(product_list: list, user_constraints: dict, product_type: str = None) -> list:
     constraint_text = json.dumps(user_constraints)
@@ -352,13 +356,20 @@ def check_product_compatibility(product_list: list, user_constraints: dict, prod
         print("❌ Compatibility check failed:", str(e))
         return []
 
-def filter_products_with_llm(product_list: list, preferences: list) -> list:
+def filter_products_with_llm(product_list: list, preferences: dict, constraints: list = None) -> list:
+    constraints = constraints or []
+    
     prompt = (
         "You are an intelligent shopping assistant.\n"
-        f"The user has the following preferences:\n{json.dumps(preferences)}\n\n"
+        f"The user has the following PREFERENCES (specific requirements): {json.dumps(preferences)}\n"
+        f"The user has the following CONSTRAINTS (qualitative desires): {json.dumps(constraints)}\n\n"
         f"Here are the products to evaluate:\n{json.dumps(product_list, indent=2)}\n\n"
-        "Please filter the products based on how well they align with the user's preferences. "
-        "Return a JSON list of the best-matching products (including all their attributes)."
+        "Please filter the products based on how well they align with the user's preferences AND constraints. "
+        "CRITICAL: Products MUST meet all preferences (specific requirements) to be included. "
+        "Constraints are used for ranking among products that meet the preferences. "
+        "Pay special attention to preferences like price limits, capacity requirements, energy efficiency ratings, etc. "
+        "Only return products that meet ALL user preferences. "
+        "Return a JSON list of the qualifying products (including all their attributes). "
         "Return only valid JSON. Do not include markdown or explanations. Do not wrap the JSON in triple backticks."
     )
 

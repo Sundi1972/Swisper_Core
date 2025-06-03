@@ -122,8 +122,9 @@ class ContractStateMachine:
                 self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products (>{threshold}). Transition: search → analyze_attributes")
                 self.context.update_state("analyze_attributes")
             else:
-                self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products (<={threshold}). Transition: search → rank_and_select")
-                self.context.update_state("rank_and_select")
+                self.logger.info(f"FSM (session: {session_id}): Found {len(results)} products (<={threshold}). Transition: search → wait_for_preferences")
+                self.context.update_state("wait_for_preferences")
+                return {"ask_user": "I found several options. To help you choose the best one, could you provide more criteria? For example: price range, capacity, energy rating, or any specific requirements you have. Or type 'cancel' to exit this purchase."}
             return self.next()
 
         elif self.context.current_state == "analyze_attributes":
@@ -184,8 +185,17 @@ class ContractStateMachine:
                 
                 preferences_data = analyze_user_preferences(user_input, self.context.search_results)
                 
-                self.context.preferences = preferences_data.get("preferences", [])
-                self.context.constraints = preferences_data.get("constraints", {})
+                preferences = preferences_data.get("preferences", {})
+                if not isinstance(preferences, dict):
+                    self.logger.warning(f"⚠️ Invalid preferences type: {type(preferences)}, converting to dict")
+                    preferences = {}
+                self.context.preferences = preferences
+                
+                constraints = preferences_data.get("constraints", [])
+                if not isinstance(constraints, list):
+                    self.logger.warning(f"⚠️ Invalid constraints type: {type(constraints)}, converting to list")
+                    constraints = []
+                self.context.constraints = constraints
                 self.contract["parameters"]["preferences"] = self.context.preferences
                 self.contract["parameters"]["constraints"] = self.context.constraints
                 
@@ -194,8 +204,9 @@ class ContractStateMachine:
                 self.logger.info(f"FSM (session: {session_id}): Contract parameters updated with preferences and constraints")
                 
                 has_compatibility = any(keyword in user_input.lower() for keyword in ["compatible", "compatibility", "works with", "fits"])
+                has_compatibility_constraint = any("compatible" in str(constraint).lower() for constraint in self.context.constraints)
                 
-                if has_compatibility and self.context.constraints:
+                if has_compatibility and (self.context.constraints or has_compatibility_constraint):
                     self.logger.info(f"FSM (session: {session_id}): Compatibility requirements detected. Transition: wait_for_preferences → check_compatibility")
                     self.context.update_state("check_compatibility")
                 else:
@@ -211,8 +222,12 @@ class ContractStateMachine:
             try:
                 from contract_engine.llm_helpers import filter_products_with_llm
                 
-                if self.context.preferences:
-                    filtered_products = filter_products_with_llm(self.context.search_results, self.context.preferences)
+                if self.context.preferences or self.context.constraints:
+                    filtered_products = filter_products_with_llm(
+                        self.context.search_results, 
+                        self.context.preferences,
+                        self.context.constraints
+                    )
                     self.context.search_results = filtered_products
                 
                 self.logger.info(f"FSM (session: {session_id}): Filtered to {len(self.context.search_results)} products. Transition: filter_products → rank_and_select")
