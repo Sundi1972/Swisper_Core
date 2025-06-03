@@ -79,11 +79,9 @@ const Header: React.FC<HeaderProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <div className="flex items-center space-x-2">
-          <div className="h-8 w-8 bg-[#00a9dd] rounded-lg flex items-center justify-center">
-            <span className="text-white text-lg font-bold">S</span>
-          </div>
-          <span className="text-[#f9fbfc] text-xl font-bold">Swisper</span>
+        <div className="flex items-center space-x-3">
+          <img src="/swisper-logo-blue.svg" alt="Swisper Logo" className="h-8 w-8" />
+          <img src="/swisper-text-white.svg" alt="Swisper" className="h-6 w-auto" />
         </div>
       </div>
 
