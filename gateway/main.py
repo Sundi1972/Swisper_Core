@@ -239,41 +239,58 @@ async def call_tool(tool_name: str, body: ToolCallParams):
 async def get_current_contract(session_id: str) -> Dict[str, Any]:
     logger.info("Received request for GET /contracts/current/%s", session_id)
     try:
-        from orchestrator.session_store import get_contract_fsm, get_pending_confirmation
+        from orchestrator.session_store import get_contract_fsm, get_pending_confirmation, get_contract_context
         import yaml
         
         contract_fsm = get_contract_fsm(session_id)
         pending_product = get_pending_confirmation(session_id)
         
+        context_data = get_contract_context(session_id)
+        
         # Check if we have either a stored FSM or a pending confirmation
-        if not contract_fsm and not pending_product:
+        if not contract_fsm and not pending_product and not context_data:
             return {
                 "has_contract": False,
                 "contract_data": None,
+                "context": None,
                 "message": "No active contract for this session"
             }
         
-        if contract_fsm:
+        if contract_fsm and hasattr(contract_fsm, 'context'):
             contract_data = {
-                "template_path": getattr(contract_fsm, 'template_path', None),
-                "current_state": getattr(contract_fsm, 'state', None),
-                "parameters": getattr(contract_fsm, 'parameters', {}),
-                "search_results": getattr(contract_fsm, 'search_results', []),
-                "selected_product": getattr(contract_fsm, 'selected_product_for_confirmation', None),
-                "template_content": {}
+                "template_path": contract_fsm.context.contract_template_path,
+                "current_state": contract_fsm.context.current_state,
+                "parameters": getattr(contract_fsm, 'contract', {}).get("parameters", {}),
+                "search_results": contract_fsm.context.search_results,
+                "selected_product": contract_fsm.context.selected_product,
+                "template_content": contract_fsm.context.contract_template or {}
             }
+            context = contract_fsm.context.to_dict()
+        elif context_data:
+            # Fallback to stored context data
+            contract_data = {
+                "template_path": context_data.get("contract_template_path"),
+                "current_state": context_data.get("current_state"),
+                "parameters": {},
+                "search_results": context_data.get("search_results", []),
+                "selected_product": context_data.get("selected_product"),
+                "template_content": context_data.get("contract_template", {})
+            }
+            context = context_data
         else:
+            # Legacy fallback for pending confirmation
             contract_data = {
                 "template_path": "contract_templates/purchase_item.yaml",
                 "current_state": "confirm_order",
                 "parameters": {
                     "session_id": session_id,
-                    "product": pending_product.get("name", "Unknown product")
+                    "product": pending_product.get("name", "Unknown product") if pending_product else None
                 },
                 "search_results": [],
                 "selected_product": pending_product,
                 "template_content": {}
             }
+            context = None
         
         if contract_data["template_path"] and os.path.exists(contract_data["template_path"]):
             try:
@@ -286,6 +303,7 @@ async def get_current_contract(session_id: str) -> Dict[str, Any]:
         return {
             "has_contract": True,
             "contract_data": contract_data,
+            "context": context,
             "message": "Active contract found"
         }
         
