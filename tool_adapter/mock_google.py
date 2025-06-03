@@ -103,9 +103,17 @@ def mock_google_shopping(q: str) -> List[Dict[str, Any]]:
         logger.error("An unexpected error occurred in mock_google_shopping: %s", e, exc_info=True)
         return [{"error": f"Unexpected error: {str(e)}", "query": q}]
 
-def google_shopping_search(q: str) -> List[Dict[str, Any]]:
+def google_shopping_search(q: str, **kwargs) -> List[Dict[str, Any]]:
     """Main search function - uses real API with mock fallback"""
-    return real_google_shopping(q)
+    SEARCHAPI_API_KEY = os.environ.get("SEARCHAPI_API_KEY")
+    logger.info("🔑 API Key status", extra={"searchapi_configured": bool(SEARCHAPI_API_KEY)})
+    
+    if SEARCHAPI_API_KEY:
+        logger.info("🌐 Using real SearchAPI.io", extra={"query": q})
+        return real_google_shopping(q, **kwargs)
+    else:
+        logger.warning("⚠️ Using mock data - SEARCHAPI_API_KEY not configured", extra={"query": q})
+        return mock_google_shopping(q, **kwargs)
 
 def mock_google_shopping_adapter(q: str) -> List[Dict[str, Any]]:
     return mock_google_shopping(q=q)

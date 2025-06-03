@@ -2,7 +2,9 @@
 import logging
 import os
 import json # Added import
-from fastapi import FastAPI, HTTPException
+import asyncio
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Any, Dict # Added Dict here
 
@@ -33,6 +35,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+from .log_handler import log_buffer, WebSocketLogHandler
+
 app = FastAPI()
 
 # CORS configuration
@@ -50,6 +54,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def setup_logging():
+    """Setup logging to capture all logs in our buffer"""
+    root_logger = logging.getLogger()
+    websocket_handler = WebSocketLogHandler(log_buffer)
+    websocket_handler.setLevel(logging.DEBUG)
+    root_logger.addHandler(websocket_handler)
+
+setup_logging()
 
 # Path to tools.json - Assuming WORKDIR is /app (repository root) for Docker execution
 TOOLS_JSON_PATH = "orchestrator/tool_registry/tools.json" 
@@ -97,6 +110,43 @@ async def chat_endpoint(payload: ChatRequest) -> Dict[str, Any]: # Added return 
         raise HTTPException(status_code=500, detail="Invalid response format from orchestrator.")
 
     return orchestrator_response
+
+@app.get("/api/logs")
+async def get_logs(level: str = "INFO", limit: int = 100):
+    """Get recent logs with optional level filtering"""
+    try:
+        logs = log_buffer.get_logs(level=level.upper(), limit=limit)
+        return {"logs": logs, "total": len(logs)}
+    except Exception as e:
+        logger.error("Error fetching logs: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Error fetching logs")
+
+@app.websocket("/ws/logs")
+async def websocket_logs(websocket: WebSocket, level: str = "INFO"):
+    """WebSocket endpoint for real-time log streaming"""
+    await websocket.accept()
+    log_buffer.add_subscriber(websocket)
+    
+    try:
+        recent_logs = log_buffer.get_logs(level=level.upper(), limit=50)
+        for log_entry in recent_logs:
+            await websocket.send_text(json.dumps(log_entry))
+        
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                message = json.loads(data)
+                if message.get("type") == "change_level":
+                    level = message.get("level", "INFO").upper()
+            except asyncio.TimeoutError:
+                await websocket.send_text(json.dumps({"type": "ping"}))
+            except json.JSONDecodeError:
+                continue
+                
+    except WebSocketDisconnect:
+        pass
+    finally:
+        log_buffer.remove_subscriber(websocket)
 
 # OPENAI_API_KEY check (optional, if gateway itself doesn't use it directly)
 # OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")

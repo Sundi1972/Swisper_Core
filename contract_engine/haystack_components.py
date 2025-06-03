@@ -16,14 +16,15 @@ class MockGoogleShoppingComponent(BaseComponent):
         # Any specific initialization if needed
 
     def run(self, query: str) -> Tuple[Dict[str, Any], str]:
-        logger.info(f"MockGoogleShoppingComponent received query: {query}")
+        logger.info("🛍️ Product search initiated", extra={"query": query})
         try:
             products = search_fn(q=query)
             # Handle cases where search_fn might return error dicts
             if isinstance(products, list) and products and isinstance(products[0], dict) and "error" in products[0]:
-                logger.warning(f"Mock search for '{query}' returned an error: {products[0]['error']}")
-                output = {"products": []} # Or pass error through
+                logger.warning("🚫 Product search error", extra={"query": query, "error": products[0]['error']})
+                output = {"products": []}
             else:
+                logger.info("✅ Products found", extra={"query": query, "count": len(products)})
                 output = {"products": products}
             return output, "output_1" # Standard Haystack component output format
         except Exception as e:
@@ -62,7 +63,7 @@ class SimplePythonRankingComponent(BaseComponent):
         return (rating, -price) # Sort by rating (desc), then price (asc)
 
     def run(self, products: List[Dict[str, Any]]) -> Tuple[Dict[str, Any], str]:
-        logger.info(f"SimplePythonRankingComponent received {len(products)} products.")
+        logger.info("📊 Ranking products", extra={"product_count": len(products)})
         if not products or not isinstance(products, list):
             logger.warning("No products provided to rank or input is not a list.")
             return {"ranked_products": []}, "output_1"
@@ -97,7 +98,7 @@ class ProductSelectorComponent(BaseComponent):
         super().__init__()
 
     def run(self, ranked_products: List[Dict[str, Any]]) -> Tuple[Dict[str, Any], str]:
-        logger.info(f"ProductSelectorComponent received {len(ranked_products)} ranked products.")
+        logger.info("🎯 Selecting top product", extra={"ranked_count": len(ranked_products)})
         if not ranked_products or not isinstance(ranked_products, list):
             logger.warning("No ranked products provided to select from or input is not a list.")
             output = {"selected_product": None}
@@ -109,7 +110,7 @@ class ProductSelectorComponent(BaseComponent):
                 output = {"selected_product": None}
             else:
                 top_product = valid_products[0]
-                logger.info(f"Selected product: {top_product.get('name', 'Unknown name')}")
+                logger.info("🏆 Product selected", extra={"product": top_product.get('name', 'Unknown name'), "price": top_product.get('price', 'N/A')})
                 output = {"selected_product": top_product}
         
         return output, "output_1"

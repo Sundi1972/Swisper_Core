@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import SwisperChat from './SwisperChat';
 import ContractViewer from './ContractViewer';
+import LogViewer from './LogViewer';
 
 function App() {
   const [activeTab, setActiveTab] = useState('chat');
@@ -31,12 +32,23 @@ function App() {
           >
             Contracts
           </button>
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+              activeTab === 'logs'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            Logs
+          </button>
         </div>
       </div>
 
       {/* Tab Content */}
       {activeTab === 'chat' && <SwisperChat ref={chatRef} />}
       {activeTab === 'contracts' && <ContractViewer />}
+      {activeTab === 'logs' && <LogViewer />}
     </main>
   );
 }

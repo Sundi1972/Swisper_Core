@@ -54,7 +54,7 @@ class Message(BaseModel):
     content: str
 
 async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
-    logger.info("Orchestrator handling for session: %s, with %d messages.", session_id, len(messages))
+    logger.info("🚀 Orchestrator handling request", extra={"session_id": session_id, "message_count": len(messages)})
     
     if not messages:
         logger.warning("Orchestrator received empty messages list for session: %s", session_id)
@@ -73,7 +73,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         product_name = pending_product.get("name", "the selected product")
         if last_user_message_content.lower() in ["yes", "y", "confirm", "ok", "okay", "proceed", "sure"]:
             reply_content = f"Great! Order confirmed for {product_name}."
-            logger.info("Session %s: User confirmed order for %s.", session_id, product_name)
+            logger.info("✅ Order confirmed", extra={"session_id": session_id, "product": product_name})
             try:
                 artifact_dir = "tmp/contracts"
                 os.makedirs(artifact_dir, exist_ok=True)
@@ -93,7 +93,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
             clear_pending_confirmation(session_id)
         elif last_user_message_content.lower() in ["no", "n", "cancel", "stop"]:
             reply_content = f"Okay, the order for {product_name} has been cancelled."
-            logger.info("Session %s: User cancelled order for %s.", session_id, product_name)
+            logger.info("❌ Order cancelled", extra={"session_id": session_id, "product": product_name})
             clear_pending_confirmation(session_id)
         else: 
             reply_content = f"Sorry, I didn't quite understand. For {product_name}, please confirm with 'yes' or 'no'."
@@ -144,8 +144,11 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         intent_type = intent_data.get("intent_type")
         parameters = intent_data.get("parameters", {})
         
-        logger.info("Session %s: Extracted intent: %s (confidence: %.2f)", 
-                   session_id, intent_type, intent_data.get("confidence", 0.0))
+        logger.info("🎯 Intent extracted", extra={
+            "session_id": session_id, 
+            "intent": intent_type, 
+            "confidence": intent_data.get("confidence", 0.0)
+        })
         
     except Exception as e:
         logger.error("Intent extraction failed, using fallback: %s", e)
@@ -167,7 +170,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
     if intent_type == "contract":
         contract_template = parameters.get("contract_template")
         if contract_template == "purchase_item.yaml":
-            logger.info("Contract path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
+            logger.info("🛒 Contract path triggered", extra={"session_id": session_id, "contract_query": last_user_message_content})
             try:
                 from contract_engine.contract_engine import ContractStateMachine
                 from contract_engine.llm_helpers import extract_initial_criteria
@@ -177,8 +180,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                 
                 search_query = parameters.get("extracted_query", last_user_message_content)
                 
-                logger.info("Session %s: Extracted criteria: %s", session_id, criteria_data)
-                logger.info("Session %s: Using search query: '%s'", session_id, search_query)
+                logger.info("📋 Criteria extracted", extra={"session_id": session_id, "criteria": criteria_data})
+                logger.info("🔍 Search query prepared", extra={"session_id": session_id, "search_query": search_query})
                 
                 fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
                 fsm.fill_parameters({
@@ -213,6 +216,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
     elif intent_type == "tool_usage":
         logger.info("Tool usage path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
         tools_needed = parameters.get("tools_needed", [])
+        if not isinstance(tools_needed, list):
+            tools_needed = [tools_needed] if tools_needed else []
         try:
             reply_content = orchestrate_tools(last_user_message_content, tools_needed)
         except Exception as e:
@@ -220,7 +225,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
             reply_content = "Sorry, there was an error using the tools to help you."
     
     elif intent_type == "rag":
-        logger.info("RAG path for session %s. Input: '%s'", session_id, last_user_message_content)
+        logger.info("📚 RAG path triggered", extra={"session_id": session_id, "rag_question": last_user_message_content})
         question_for_rag = parameters.get("rag_question", "")
         
         if not question_for_rag:
@@ -228,13 +233,13 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         else:
             try:
                 reply_content = ask_document_pipeline(question=question_for_rag)
-                logger.info("RAG pipeline returned for session %s: '%s...'", session_id, reply_content[:100])
+                logger.info("📖 RAG response generated", extra={"session_id": session_id, "response_preview": reply_content[:100]})
             except Exception as e: 
                 logger.error("Error calling RAG ask_document_pipeline for session %s: %s", session_id, e, exc_info=True)
                 reply_content = "Sorry, there was an error trying to answer your document question."
     
     else:
-        logger.info("Chat path for session %s. Input: '%s'", session_id, last_user_message_content)
+        logger.info("💬 Chat path triggered", extra={"session_id": session_id, "user_input": last_user_message_content})
         if not async_client:
             logger.error("AsyncOpenAI client not available for chat path.")
             reply_content = "Error: LLM service not available." 
