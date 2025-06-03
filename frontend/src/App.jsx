@@ -9,12 +9,13 @@ import Sidebar from './components/common/Sidebar';
 function App() {
   const [activeTab, setActiveTab] = useState('chat');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isFullWidth, setIsFullWidth] = useState(false);
   const chatRef = useRef();
 
   const tabs = [
-    { id: 'chat', label: 'Chat' },
-    { id: 'contracts', label: 'Contracts' },
-    { id: 'logs', label: 'Logs' }
+    { id: 'chat', label: 'Chat', icon: '/images/img_icon.svg' },
+    { id: 'contracts', label: 'Contracts', icon: '/images/img_folderfilled.svg' },
+    { id: 'logs', label: 'Logs', icon: '/images/img_filterlistfilled.svg' }
   ];
 
   const handleSearch = (query) => {
@@ -33,31 +34,42 @@ function App() {
     console.log('Search result selected:', sessionId, messageIndex);
   };
 
+  const handleToggleFullWidth = () => {
+    setIsFullWidth(!isFullWidth);
+  };
+
+  const handleToggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
   return (
-    <div className="min-h-screen bg-chat-background text-chat-text flex flex-col">
+    <div className="min-h-screen bg-[#020305] text-white">
       <Header 
         onSearch={handleSearch}
         onSearchResultSelect={handleSearchResultSelect}
+        isFullWidth={isFullWidth}
+        onToggleFullWidth={handleToggleFullWidth}
+        onToggleSidebar={handleToggleSidebar}
       />
       
-      <div className="flex flex-1 gap-4 p-4">
-        <Sidebar 
-          onSectionSelect={handleSectionSelect}
-          onSessionSelect={handleSessionSelect}
-          currentSessionId="default_session"
-          isCollapsed={sidebarCollapsed}
-        />
+      <div className="flex h-[calc(100vh-80px)] p-6 gap-6">
+        {!sidebarCollapsed && (
+          <Sidebar 
+            onSectionSelect={handleSectionSelect}
+            onSessionSelect={handleSessionSelect}
+            currentSessionId="default_session"
+            isCollapsed={sidebarCollapsed}
+          />
+        )}
         
-        <main className="flex-1 flex flex-col">
-          <div className="mb-4">
-            <TabBar 
-              tabs={tabs}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-            />
-          </div>
-
-          <div className="flex-1">
+        <main className={`flex-1 bg-[#141923] rounded-2xl p-6 flex flex-col ${isFullWidth ? 'max-w-none' : 'max-w-6xl mx-auto'}`}>
+          <TabBar 
+            tabs={tabs}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+          />
+          
+          <div className="flex-1 mt-6">
             {activeTab === 'chat' && <SwisperChat ref={chatRef} />}
             {activeTab === 'contracts' && <ContractViewer />}
             {activeTab === 'logs' && <LogViewer />}

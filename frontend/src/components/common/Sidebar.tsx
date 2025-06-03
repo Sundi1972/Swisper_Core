@@ -25,7 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({
-    recent: true
+    chats: true
   });
 
   const fetchSessions = async () => {
@@ -84,9 +84,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   if (isCollapsed) {
     return (
-      <aside className="w-16 bg-chat-message rounded-lg p-2 h-full">
+      <aside className="w-16 bg-[#141923] rounded-2xl p-2 h-full">
         <div className="flex flex-col items-center space-y-4">
-          <div className="w-8 h-8 bg-chat-accent rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-[#00a9dd] rounded-lg flex items-center justify-center">
             <span className="text-white text-sm">S</span>
           </div>
         </div>
@@ -95,51 +95,47 @@ const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <aside className="w-64 bg-chat-message rounded-lg p-4 h-full overflow-y-auto">
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-chat-text text-sm font-medium uppercase tracking-wide">Recent Chats</h2>
-          <Button
-            variant="outline"
-            size="icon"
-            color="secondary"
-            className="h-6 w-6"
+    <aside className="w-[267px] bg-[#141923] rounded-2xl p-8 h-full overflow-y-auto">
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-[#f9fbfc] text-sm font-normal uppercase tracking-wide">CHATS</h2>
+          <img 
+            src="/images/img_addfilled.svg" 
+            alt="Add" 
+            className="h-5 w-5 cursor-pointer hover:opacity-80" 
             onClick={createNewSession}
-            title="New Session"
-          >
-            +
-          </Button>
+          />
         </div>
 
         {loading ? (
-          <div className="text-chat-secondary text-sm">Loading sessions...</div>
+          <div className="text-[#8f99ad] text-sm">Loading sessions...</div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {sessions.length === 0 ? (
-              <div className="text-chat-secondary text-sm">No sessions yet</div>
+              <div className="text-[#8f99ad] text-sm">No sessions yet</div>
             ) : (
               sessions.map((session) => (
                 <div 
                   key={session.id}
-                  className={`cursor-pointer hover:bg-chat-background rounded-lg p-2 -mx-2 transition-colors ${
-                    currentSessionId === session.id ? 'bg-chat-background border-l-2 border-chat-accent' : ''
+                  className={`cursor-pointer hover:bg-[#222834] rounded-lg p-2 -mx-2 transition-colors ${
+                    currentSessionId === session.id ? 'bg-[#222834] border-l-2 border-[#00a9dd]' : ''
                   }`}
                   onClick={() => onSessionSelect(session.id)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className="text-chat-text text-sm font-medium truncate">
+                      <div className="text-[#f9fbfc] text-sm font-medium truncate">
                         Session {session.id.slice(-8)}
                         {session.has_contract && (
-                          <span className="ml-1 text-chat-accent">📄</span>
+                          <span className="ml-1 text-[#00a9dd]">📄</span>
                         )}
                       </div>
                       {session.last_message && (
-                        <div className="text-chat-secondary text-xs truncate mt-1">
+                        <div className="text-[#b6c2d1] text-xs truncate mt-1">
                           {session.last_message}
                         </div>
                       )}
-                      <div className="text-chat-muted text-xs mt-1">
+                      <div className="text-[#8f99ad] text-xs mt-1">
                         {session.message_count} messages • {formatTimestamp(session.last_timestamp)}
                       </div>
                     </div>
@@ -151,15 +147,61 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-[#f9fbfc] text-sm font-normal uppercase tracking-wide">BOOKMARKS</h2>
+          <img src="/images/img_addfilled.svg" alt="Add" className="h-5 w-5 cursor-pointer hover:opacity-80" />
+        </div>
+
+        <div className="space-y-4">
+          {['Mental Health', 'Home Appliances', 'Education'].map((bookmark, index) => (
+            <div
+              key={index}
+              className="text-[#f9fbfc] text-sm cursor-pointer hover:bg-[#222834] rounded-lg p-2 -mx-2 transition-colors"
+              onClick={() => onSectionSelect(bookmark.toLowerCase().replace(' ', '-'))}
+            >
+              {bookmark}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-[#f9fbfc] text-sm font-normal uppercase tracking-wide">NOTES</h2>
+          <img src="/images/img_addfilled.svg" alt="Add" className="h-5 w-5 cursor-pointer hover:opacity-80" />
+        </div>
+
+        <div className="space-y-4">
+          {['Air Conditioner', 'Mental Health', 'Home Appliances', 'Education'].map((note, index) => (
+            <div key={index}>
+              {index === 0 ? (
+                <div className="flex items-center space-x-3 cursor-pointer hover:bg-[#222834] rounded-lg p-2 -mx-2 transition-colors">
+                  <img src="/images/img_folderfilled.svg" alt="" className="h-6 w-6" />
+                  <span className="text-[#f9fbfc] text-sm">{note}</span>
+                  <img src="/images/img_expandlessfilled.svg" alt="Toggle" className="h-6 w-6 ml-auto" />
+                </div>
+              ) : (
+                <div
+                  className="text-[#f9fbfc] text-sm cursor-pointer hover:bg-[#222834] rounded-lg p-2 -mx-2 transition-colors"
+                  onClick={() => onSectionSelect(note.toLowerCase().replace(' ', '-'))}
+                >
+                  {note}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="mt-auto">
         <Button
+          onClick={() => onSectionSelect('feedback')}
           variant="outline"
           color="primary"
-          className="w-full"
-          size="xs"
-          onClick={() => onSectionSelect('settings')}
+          className="w-full border-[#00a9dd] text-[#00a9dd] rounded-[21px] h-[42px] hover:bg-[#00a9dd] hover:text-white transition-colors"
         >
-          Settings
+          Feedback
         </Button>
       </div>
     </aside>
