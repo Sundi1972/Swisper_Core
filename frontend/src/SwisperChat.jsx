@@ -1,8 +1,8 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { Button } from './components/ui/Button';
 import InputField from './components/ui/InputField';
 
-const SwisperChat = forwardRef((props, ref) => {
+const SwisperChat = forwardRef(() => {
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Hi, how can I help you today?" }
   ]);
@@ -61,16 +61,14 @@ const SwisperChat = forwardRef((props, ref) => {
       if (data.reply) {
         setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
       }
-    } catch (err) {
-      setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong." }]);
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I'm having trouble connecting to the AI service. Please try again later." }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleSend();
-  };
+
 
   const handleNewSession = () => {
     const newSessionId = crypto.randomUUID();
@@ -112,8 +110,8 @@ const SwisperChat = forwardRef((props, ref) => {
       if (data.reply) {
         setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
       }
-    } catch (err) {
-      setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong with RAG query." }]);
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I'm having trouble connecting to the AI service for document queries. Please try again later." }]);
     } finally {
       setLoading(false);
       setInput(originalInput); // Restore original input if any

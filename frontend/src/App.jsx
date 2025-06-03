@@ -8,7 +8,7 @@ import Sidebar from './components/common/Sidebar';
 
 function App() {
   const [activeTab, setActiveTab] = useState('chat');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed] = useState(false);
   const chatRef = useRef();
 
   const tabs = [
