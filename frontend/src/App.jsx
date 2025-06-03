@@ -28,6 +28,9 @@ function App() {
 
   const handleSessionSelect = (sessionId) => {
     console.log('Session selected:', sessionId);
+    if (sessionId.startsWith('session_') && chatRef.current) {
+      chatRef.current.handleNewSession();
+    }
   };
 
   const handleSearchResultSelect = (sessionId, messageIndex) => {
