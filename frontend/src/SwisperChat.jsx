@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { Button } from './components/ui/Button';
 import InputField from './components/ui/InputField';
 
@@ -9,6 +9,7 @@ const SwisperChat = forwardRef((props, ref) => {
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef(null);
 
   // Persistent session ID using localStorage
   useEffect(() => {
@@ -39,6 +40,12 @@ const SwisperChat = forwardRef((props, ref) => {
       localStorage.setItem(`chat_history_${sessionId}`, JSON.stringify(messages));
     }
   }, [messages, sessionId]);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || !sessionId) return;
@@ -83,18 +90,9 @@ const SwisperChat = forwardRef((props, ref) => {
 
   const handleAskDocs = async () => {
     const ragQuestion = "#rag What is Swisper?";
-    // Temporarily set the input, then call handleSend, then restore input
-    // This is a simple way to reuse the existing handleSend logic.
     const originalInput = input; 
     setInput(ragQuestion); 
     
-    // We need to ensure handleSend uses the updated input value.
-    // Since setInput is async, we pass the value directly to a modified/new send function
-    // For simplicity here, we'll assume handleSend will pick up the new 'input' state
-    // or we create a version of handleSend that takes content.
-    // Let's make a direct call by simulating the state update for `handleSend`.
-    
-    // Simulate messages update that handleSend expects
     const updatedMessagesWithRag = [...messages, { role: "user", content: ragQuestion }];
     setMessages(updatedMessagesWithRag);
     setLoading(true);
@@ -116,60 +114,106 @@ const SwisperChat = forwardRef((props, ref) => {
       setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong with RAG query." }]);
     } finally {
       setLoading(false);
-      setInput(originalInput); // Restore original input if any
+      setInput(originalInput);
     }
+  };
+
+  const handleVoiceInput = () => {
+    console.log('Voice input activated');
+  };
+
+  const handleAddAction = () => {
+    console.log('Add action triggered');
   };
 
 
   return (
-    <div className="max-w-xl mx-auto p-4 space-y-4 font-sans">
-      <div className="bg-chat-message rounded-lg p-4 h-[60vh] overflow-y-auto">
-        {messages.map((msg, i) => (
-          <div key={i} className={`text-sm mb-2 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-            <span className="font-semibold">{msg.role === 'user' ? 'You' : 'Swisper'}:</span> {msg.content}
-          </div>
-        ))}
+    <div className="flex flex-col h-full max-h-[calc(100vh-200px)]">
+      <div className="flex items-center mb-6 flex-shrink-0">
+        <div className="flex items-center bg-transparent rounded-lg px-3 py-2">
+          <span className="text-[#b6c2d1] text-base mr-3">Swisper AI</span>
+          <svg className="h-6 w-6 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </div>
 
-      <div className="flex gap-2 mt-4">
-        <InputField
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Type your message..."
-          className="flex-1"
-          disabled={loading}
-        />
-        <Button
-          onClick={handleSend}
-          disabled={loading}
-          variant="fill"
-          color="primary"
-          size="xs"
-        >
-          {loading ? 'Sending...' : 'Send'}
-        </Button>
+      <div className="flex-1 overflow-y-auto space-y-6 mb-20 min-h-0">
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[492px] ${
+              msg.role === 'user' 
+                ? 'bg-[#141923] rounded-lg p-4' 
+                : 'bg-[#222834] rounded-2xl p-4 shadow-[0px_2px_1px_#00000033]'
+            }`}>
+              <p className={`text-sm leading-5 mb-2 ${
+                msg.role === 'user' ? 'text-[#f9fbfc]' : 'text-[#f9fbfc]'
+              }`} style={{ whiteSpace: 'pre-line' }}>
+                {msg.content}
+              </p>
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
       </div>
-      
-      <div className="flex gap-2 mt-2">
-        <Button
-          onClick={handleNewSession}
-          variant="outline"
-          color="secondary"
-          size="xs"
-          disabled={loading}
-        >
-          New Session
-        </Button>
-        <Button
-          onClick={handleAskDocs}
-          variant="outline"
-          color="secondary"
-          size="xs"
-          disabled={loading}
-        >
-          Ask Docs
-        </Button>
+
+      <div className="bg-[#020305] rounded-lg p-5 flex-shrink-0 sticky bottom-8">
+        <p className="text-[#8f99ad] text-sm mb-4">How can I help?</p>
+        <div className="flex items-center space-x-3">
+          <button 
+            onClick={handleAddAction}
+            className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center text-[#b6c2d1] text-base hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
+          >
+            +
+          </button>
+          <button 
+            onClick={handleNewSession}
+            className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
+            title="New Session"
+          >
+            <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </button>
+          <button 
+            onClick={handleAskDocs}
+            className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
+            title="Ask Docs"
+          >
+            <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </button>
+          <button 
+            onClick={handleVoiceInput}
+            className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
+            title="Voice Input"
+          >
+            <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          </button>
+          <div className="flex-1">
+            <InputField
+              placeholder="Type your message..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              className="border-none bg-transparent text-[#f9fbfc] placeholder-[#8f99ad]"
+              disabled={loading}
+            />
+          </div>
+          <Button
+            onClick={handleSend}
+            disabled={loading}
+            size="icon"
+            className="bg-[#00a9dd] rounded-[17px] h-[34px] w-[34px] hover:bg-[#0088bb] transition-colors"
+          >
+            <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </Button>
+        </div>
       </div>
     </div>
   );
