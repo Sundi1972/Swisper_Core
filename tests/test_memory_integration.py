@@ -183,3 +183,78 @@ def test_memory_integration_cleanup(mock_redis):
             result = memory_manager.clear_session_memory("test_session")
             assert result is True
             assert "test_session" not in memory_manager._session_configs
+
+@patch('contract_engine.memory.memory_manager.milvus_semantic_store')
+def test_memory_integration_semantic_memory(mock_milvus_store):
+    """Test semantic memory integration with Memory Manager"""
+    mock_milvus_store.add_memory.return_value = True
+    mock_milvus_store.search_memories.return_value = [
+        {"content": "User prefers gaming laptops", "metadata": {"type": "preference"}, "similarity_score": 0.9}
+    ]
+    
+    memory_manager = MemoryManager()
+    
+    result = memory_manager.add_semantic_memory("user123", "Prefers gaming laptops", "preference")
+    assert result is True
+    
+    semantic_memories = memory_manager.get_semantic_context("user123", "laptop preferences")
+    assert len(semantic_memories) == 1
+    assert "gaming laptops" in semantic_memories[0]["content"]
+
+@patch('contract_engine.memory.memory_manager.milvus_semantic_store')
+def test_memory_integration_enhanced_context(mock_milvus_store):
+    """Test enhanced context with semantic memories"""
+    mock_milvus_store.search_memories.return_value = [
+        {"content": "Budget under $1000", "metadata": {"type": "constraint"}, "similarity_score": 0.8}
+    ]
+    
+    memory_manager = MemoryManager()
+    
+    with patch.object(memory_manager, 'get_context') as mock_get_context:
+        mock_get_context.return_value = {
+            "buffer_messages": [],
+            "current_summary": "Previous conversation summary",
+            "total_tokens": 100
+        }
+        
+        enhanced_context = memory_manager.get_enhanced_context("session123", "user123", "laptop shopping")
+        
+        assert "semantic_memories" in enhanced_context
+        assert len(enhanced_context["semantic_memories"]) == 1
+        assert "Budget under $1000" in enhanced_context["semantic_memories"][0]["content"]
+
+def test_t5_summarization_integration():
+    """Test T5 summarization integration with Memory Manager"""
+    memory_manager = MemoryManager()
+    
+    messages = [
+        {"content": "I want to buy a laptop for programming"},
+        {"content": "My budget is around 1000 dollars"},
+        {"content": "I prefer something lightweight"}
+    ]
+    
+    with patch('contract_engine.pipelines.rolling_summariser.summarize_messages') as mock_summarize:
+        mock_summarize.return_value = "User seeks programming laptop under $1000, prefers lightweight"
+        
+        summary = memory_manager._create_summary(messages)
+        
+        assert "programming laptop" in summary
+        assert "$1000" in summary
+        assert "lightweight" in summary
+        mock_summarize.assert_called_once_with(messages)
+
+def test_t5_summarization_fallback():
+    """Test T5 summarization fallback in Memory Manager"""
+    memory_manager = MemoryManager()
+    
+    messages = [
+        {"content": "Test message " * 50}
+    ]
+    
+    with patch('contract_engine.pipelines.rolling_summariser.summarize_messages') as mock_summarize:
+        mock_summarize.side_effect = Exception("T5 failed")
+        
+        summary = memory_manager._create_summary(messages)
+        
+        assert summary.endswith("...")
+        assert len(summary) <= 203
