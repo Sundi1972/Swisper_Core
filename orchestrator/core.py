@@ -264,6 +264,9 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                     "enhanced_query": search_query
                 })
                 
+                if hasattr(fsm, 'context') and fsm.context:
+                    fsm.context.session_id = session_id
+                
                 logger.info("🔧 FSM initialized", extra={"session_id": session_id, "initial_state": fsm.context.current_state})
                 
                 result = fsm.next()
