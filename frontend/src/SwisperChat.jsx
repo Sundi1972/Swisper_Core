@@ -225,41 +225,44 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
                 msg.role === 'user' ? 'text-[#f9fbfc]' : 'text-[#f9fbfc]'
               }`}>
                 {msg.role === 'assistant' ? (
-                  <ReactMarkdown
-                    rehypePlugins={[rehypeHighlight]}
-                    components={{
-                      code: ({inline, className, children, ...props}) => {
-                        return !inline ? (
-                          <pre className="bg-[#1a1a1a] rounded-lg p-3 overflow-x-auto">
-                            <code className={className} {...props}>
+                  searchQuery && highlightEnabled ? (
+                    <div 
+                      className="text-sm leading-5"
+                      dangerouslySetInnerHTML={{
+                        __html: highlightSearchTerms(msg.content, searchQuery)
+                      }} 
+                    />
+                  ) : (
+                    <ReactMarkdown
+                      rehypePlugins={[rehypeHighlight]}
+                      components={{
+                        code: ({inline, className, children, ...props}) => {
+                          return !inline ? (
+                            <pre className="bg-[#1a1a1a] rounded-lg p-3 overflow-x-auto">
+                              <code className={className} {...props}>
+                                {children}
+                              </code>
+                            </pre>
+                          ) : (
+                            <code className="bg-[#1a1a1a] px-1 py-0.5 rounded text-sm" {...props}>
                               {children}
                             </code>
-                          </pre>
-                        ) : (
-                          <code className="bg-[#1a1a1a] px-1 py-0.5 rounded text-sm" {...props}>
-                            {children}
-                          </code>
-                        );
-                      },
-                      p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
-                      ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                      ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                      li: ({children}) => <li className="text-[#f9fbfc]">{children}</li>,
-                      h1: ({children}) => <h1 className="text-lg font-bold mb-2 text-[#f9fbfc]">{children}</h1>,
-                      h2: ({children}) => <h2 className="text-base font-bold mb-2 text-[#f9fbfc]">{children}</h2>,
-                      h3: ({children}) => <h3 className="text-sm font-bold mb-2 text-[#f9fbfc]">{children}</h3>,
-                      strong: ({children}) => <strong className="font-bold text-[#f9fbfc]">{children}</strong>,
-                      em: ({children}) => <em className="italic text-[#f9fbfc]">{children}</em>
-                    }}
-                  >
-                    {searchQuery && highlightEnabled ? (
-                      <div dangerouslySetInnerHTML={{
-                        __html: highlightSearchTerms(msg.content, searchQuery)
-                      }} />
-                    ) : (
-                      msg.content
-                    )}
-                  </ReactMarkdown>
+                          );
+                        },
+                        p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                        ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                        ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                        li: ({children}) => <li className="text-[#f9fbfc]">{children}</li>,
+                        h1: ({children}) => <h1 className="text-lg font-bold mb-2 text-[#f9fbfc]">{children}</h1>,
+                        h2: ({children}) => <h2 className="text-base font-bold mb-2 text-[#f9fbfc]">{children}</h2>,
+                        h3: ({children}) => <h3 className="text-sm font-bold mb-2 text-[#f9fbfc]">{children}</h3>,
+                        strong: ({children}) => <strong className="font-bold text-[#f9fbfc]">{children}</strong>,
+                        em: ({children}) => <em className="italic text-[#f9fbfc]">{children}</em>
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  )
                 ) : (
                   searchQuery && highlightEnabled ? (
                     <div 

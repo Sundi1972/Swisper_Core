@@ -39,15 +39,12 @@ const Header: React.FC<HeaderProps> = ({
     const query = e.target.value;
     setSearchQuery(query);
     onSearch(query);
-    
     onSearchQueryChange(query);
     
     if (query.trim().length === 0) {
-      onSearchQueryChange('');
       setShowResults(false);
-    }
-    
-    if (query.trim().length > 2) {
+      setSearchResults([]);
+    } else if (query.trim().length > 2) {
       performSearch(query);
     } else {
       setSearchResults([]);
@@ -73,7 +70,7 @@ const Header: React.FC<HeaderProps> = ({
       
       const shouldShowPopup = searchScope === 'current' 
         ? results.length > 0 
-        : hasResultsFromOtherSessions;
+        : results.length > 0;
         
       setShowResults(shouldShowPopup);
       
@@ -87,7 +84,25 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const handleResultClick = (result: SearchResult) => {
-    onSearchResultSelect(result.session_id, result.message_index);
+    if (result.session_id === currentSessionId) {
+      onSearchQueryChange(searchQuery);
+      onSearch(searchQuery);
+      setTimeout(() => {
+        const messageElements = document.querySelectorAll('[data-message-index]');
+        if (messageElements[result.message_index]) {
+          messageElements[result.message_index].scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+          messageElements[result.message_index].classList.add('ring-2', 'ring-orange-400');
+          setTimeout(() => {
+            messageElements[result.message_index].classList.remove('ring-2', 'ring-orange-400');
+          }, 3000);
+        }
+      }, 100);
+    } else {
+      onSearchResultSelect(result.session_id, result.message_index);
+    }
     setShowResults(false);
     setSearchQuery('');
   };
@@ -158,6 +173,7 @@ const Header: React.FC<HeaderProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="text-[#f9fbfc] text-sm font-medium">
                           Session {result.session_id.slice(-8)} • {result.role}
+                          {result.session_id === currentSessionId && <span className="text-[#00a9dd] ml-2">(Current)</span>}
                         </div>
                         <div className="text-[#b6c2d1] text-xs truncate mt-1">
                           {result.preview}

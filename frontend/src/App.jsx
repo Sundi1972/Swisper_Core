@@ -24,6 +24,7 @@ function App() {
   const handleSearch = (query) => {
     console.log('Search query:', query);
     setSearchHighlightEnabled(query.trim().length > 0);
+    setCurrentSearchQuery(query);
   };
 
   const handleSectionSelect = (section) => {
