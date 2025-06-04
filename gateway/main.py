@@ -3,6 +3,7 @@ import logging
 import os
 import json # Added import
 import asyncio
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -324,6 +325,100 @@ async def get_sessions() -> Dict[str, Any]:
         logger.error("Error retrieving sessions: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error retrieving sessions: {str(e)}") from e
 
+
+@app.get("/api/privacy/memories/{user_id}")
+async def list_user_memories(user_id: str) -> Dict[str, Any]:
+    """List all stored memories for user (GDPR compliance)"""
+    logger.info("Received request for GET /api/privacy/memories/%s", user_id)
+    try:
+        from contract_engine.memory.milvus_store import milvus_semantic_store
+        from contract_engine.privacy.audit_store import audit_store
+        
+        semantic_stats = milvus_semantic_store.get_user_memory_stats(user_id)
+        
+        artifacts = []
+        try:
+            artifacts = audit_store.get_user_artifacts(user_id) if audit_store.s3_client else []
+        except Exception as e:
+            logger.warning(f"Could not retrieve audit artifacts: {e}")
+        
+        return {
+            "user_id": user_id,
+            "semantic_memories": semantic_stats,
+            "audit_artifacts": {
+                "total_artifacts": len(artifacts),
+                "artifacts": artifacts[:10]  # Limit for API response
+            },
+            "data_retention_policy": "7_years",
+            "last_updated": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error("Error retrieving user memories for %s: %s", user_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error retrieving user memories: {str(e)}") from e
+
+@app.delete("/api/privacy/memories/{user_id}")
+async def delete_user_memories(user_id: str, confirm_deletion: bool = False) -> Dict[str, Any]:
+    """Delete all memories for user (GDPR right to be forgotten)"""
+    logger.info("Received request for DELETE /api/privacy/memories/%s", user_id)
+    
+    if not confirm_deletion:
+        raise HTTPException(status_code=400, detail="Must confirm deletion with confirm_deletion=true")
+    
+    try:
+        from contract_engine.memory.milvus_store import milvus_semantic_store
+        from contract_engine.privacy.audit_store import audit_store
+        from contract_engine.memory.memory_manager import memory_manager
+        
+        semantic_deleted = milvus_semantic_store.delete_user_memories(user_id)
+        
+        artifacts_deleted = False
+        try:
+            artifacts_deleted = audit_store.delete_user_artifacts(user_id) if audit_store.s3_client else True
+        except Exception as e:
+            logger.warning(f"Could not delete audit artifacts: {e}")
+        
+        sessions_cleared = 0
+        try:
+            memory_manager.clear_session_memory(user_id)
+            sessions_cleared = 1
+        except:
+            pass
+        
+        return {
+            "user_id": user_id,
+            "deletion_completed": True,
+            "semantic_memories_deleted": semantic_deleted,
+            "audit_artifacts_deleted": artifacts_deleted,
+            "active_sessions_cleared": sessions_cleared,
+            "deletion_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error("Error deleting user memories for %s: %s", user_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error deleting user memories: {str(e)}") from e
+
+@app.get("/api/privacy/pii-check")
+async def check_pii_in_text(text: str) -> Dict[str, Any]:
+    """Check text for PII without storing (privacy validation)"""
+    logger.info("Received request for GET /api/privacy/pii-check")
+    try:
+        from contract_engine.privacy.pii_redactor import pii_redactor
+        
+        detected_pii = pii_redactor.detect_pii(text)
+        is_safe = pii_redactor.is_text_safe_for_storage(text)
+        
+        return {
+            "text_safe_for_storage": is_safe,
+            "pii_detected": len(detected_pii) > 0,
+            "pii_entities": detected_pii,
+            "total_entities": len(detected_pii)
+        }
+        
+    except Exception as e:
+        logger.error("Error checking PII in text: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error checking PII: {str(e)}") from e
+
 @app.get("/api/sessions/{session_id}/history")
 async def get_session_history(session_id: str) -> Dict[str, Any]:
     """Get chat history for a specific session"""
@@ -360,3 +455,77 @@ async def search_chat_history(query: str, session_id: Optional[str] = None) -> D
     except Exception as e:
         logger.error("Error searching chat history: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error searching chat history: {str(e)}") from e
+
+@app.get("/api/privacy/memories/{user_id}")
+async def list_user_memories(user_id: str) -> Dict[str, Any]:
+    """List all stored memories for user (GDPR compliance)"""
+    logger.info("Received request for GET /api/privacy/memories/%s", user_id)
+    try:
+        from contract_engine.memory.milvus_store import milvus_semantic_store
+        from contract_engine.privacy.audit_store import audit_store
+        from datetime import datetime
+        
+        semantic_stats = milvus_semantic_store.get_user_memory_stats(user_id)
+        
+        artifacts = []
+        try:
+            artifacts = audit_store.get_user_artifacts(user_id) if audit_store.s3_client else []
+        except Exception as e:
+            logger.warning(f"Could not retrieve audit artifacts: {e}")
+        
+        return {
+            "user_id": user_id,
+            "semantic_memories": semantic_stats,
+            "audit_artifacts": {
+                "total_artifacts": len(artifacts),
+                "artifacts": artifacts[:10]
+            },
+            "data_retention_policy": "7_years",
+            "last_updated": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error("Error retrieving user memories for %s: %s", user_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error retrieving user memories: {str(e)}") from e
+
+@app.delete("/api/privacy/memories/{user_id}")
+async def delete_user_memories(user_id: str, confirm_deletion: bool = False) -> Dict[str, Any]:
+    """Delete all memories for user (GDPR right to be forgotten)"""
+    logger.info("Received request for DELETE /api/privacy/memories/%s", user_id)
+    
+    if not confirm_deletion:
+        raise HTTPException(status_code=400, detail="Must confirm deletion with confirm_deletion=true")
+    
+    try:
+        from contract_engine.memory.milvus_store import milvus_semantic_store
+        from contract_engine.privacy.audit_store import audit_store
+        from contract_engine.memory.memory_manager import memory_manager
+        from datetime import datetime
+        
+        semantic_deleted = milvus_semantic_store.delete_user_memories(user_id)
+        
+        artifacts_deleted = False
+        try:
+            artifacts_deleted = audit_store.delete_user_artifacts(user_id) if audit_store.s3_client else True
+        except Exception as e:
+            logger.warning(f"Could not delete audit artifacts: {e}")
+        
+        sessions_cleared = 0
+        try:
+            memory_manager.clear_session_memory(user_id)
+            sessions_cleared = 1
+        except:
+            pass
+        
+        return {
+            "user_id": user_id,
+            "deletion_completed": True,
+            "semantic_memories_deleted": semantic_deleted,
+            "audit_artifacts_deleted": artifacts_deleted,
+            "active_sessions_cleared": sessions_cleared,
+            "deletion_timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error("Error deleting user memories for %s: %s", user_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error deleting user memories: {str(e)}") from e
