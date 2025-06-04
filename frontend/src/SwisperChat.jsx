@@ -128,7 +128,8 @@ const SwisperChat = forwardRef((props, ref) => {
   };
 
   useImperativeHandle(ref, () => ({
-    handleNewSession
+    handleNewSession,
+    getSessionId: () => sessionId
   }));
 
 
