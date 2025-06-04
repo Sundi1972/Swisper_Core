@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import SwisperChat from './SwisperChat';
 import ContractViewer from './ContractViewer';
 import LogViewer from './LogViewer';
@@ -10,6 +10,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('chat');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isFullWidth, setIsFullWidth] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const chatRef = useRef();
 
   const tabs = [
@@ -45,6 +46,19 @@ function App() {
     setSidebarCollapsed(!sidebarCollapsed);
   };
 
+  useEffect(() => {
+    const updateSessionId = () => {
+      if (chatRef.current && chatRef.current.getSessionId) {
+        setCurrentSessionId(chatRef.current.getSessionId());
+      }
+    };
+    
+    const interval = setInterval(updateSessionId, 1000);
+    updateSessionId();
+    
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   return (
     <div className="min-h-screen bg-[#020305] text-white">
       <Header 
@@ -53,6 +67,7 @@ function App() {
         isFullWidth={isFullWidth}
         onToggleFullWidth={handleToggleFullWidth}
         onToggleSidebar={handleToggleSidebar}
+        currentSessionId={currentSessionId}
       />
       
       <div className="flex h-[calc(100vh-80px)] p-6 gap-6">

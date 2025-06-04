@@ -16,6 +16,7 @@ interface HeaderProps {
   isFullWidth?: boolean;
   onToggleFullWidth?: () => void;
   onToggleSidebar?: () => void;
+  currentSessionId?: string | null;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -24,11 +25,13 @@ const Header: React.FC<HeaderProps> = ({
   isFullWidth = false,
   onToggleFullWidth = () => {},
   onToggleSidebar = () => {},
+  currentSessionId = null,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchScope, setSearchScope] = useState<'current' | 'global'>('global');
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -46,7 +49,10 @@ const Header: React.FC<HeaderProps> = ({
   const performSearch = async (query: string) => {
     try {
       setSearching(true);
-      const response = await fetch(`http://localhost:8000/api/search?query=${encodeURIComponent(query)}`);
+      const sessionParam = searchScope === 'current' && currentSessionId 
+        ? `&session_id=${encodeURIComponent(currentSessionId)}` 
+        : '';
+      const response = await fetch(`http://localhost:8000/api/search?query=${encodeURIComponent(query)}${sessionParam}`);
       const data = await response.json();
       
       setSearchResults(data.results || []);
@@ -96,7 +102,21 @@ const Header: React.FC<HeaderProps> = ({
             onChange={handleSearchChange}
             className="border-none bg-transparent text-[#f9fbfc] placeholder-[#f9fbfc] focus:border-none"
           />
-          <img src="/search-icon.png" alt="Search Filter" className="h-6 w-6 ml-3 cursor-pointer" />
+          
+          <div className="flex items-center ml-3 space-x-2">
+            <span className="text-[#8f99ad] text-xs whitespace-nowrap">
+              {searchScope === 'current' ? 'Current Chat' : 'All Chats'}
+            </span>
+            <button 
+              onClick={() => setSearchScope(searchScope === 'current' ? 'global' : 'current')}
+              className="relative"
+              disabled={searchScope === 'current' && !currentSessionId}
+            >
+              <div className={`w-[40px] h-[20px] rounded-full border transition-colors ${searchScope === 'current' ? 'bg-[#00a9dd] border-[#00a9dd]' : 'bg-transparent border-[#8f99ad]'}`}>
+                <div className={`w-[16px] h-[16px] bg-white rounded-full transition-transform ${searchScope === 'current' ? 'translate-x-[22px]' : 'translate-x-[2px]'} mt-[2px]`}></div>
+              </div>
+            </button>
+          </div>
         </div>
         
         {showResults && (
