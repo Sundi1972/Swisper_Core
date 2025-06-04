@@ -129,35 +129,84 @@ class AttributeAnalyzerComponent(BaseComponent):
     
     def __init__(self):
         super().__init__()
+        from .performance_monitor import attribute_cache, timed_operation
+        self._cache = attribute_cache
+        self._timed_operation = timed_operation
     
     def run(self, products: List[Dict[str, Any]], product_query: str = None) -> Tuple[Dict[str, Any], str]:
         logger.info(f"AttributeAnalyzerComponent analyzing {len(products)} products for query: {product_query}")
-        try:
-            from contract_engine.llm_helpers import analyze_product_differences
+        
+        from .performance_monitor import PipelineTimer, create_cache_key
+        
+        with PipelineTimer("attribute_analysis"):
             try:
-                analysis = analyze_product_differences(products)
-                attributes = self._extract_attributes_from_analysis(analysis, product_query)
+                product_names = [p.get("name", "") for p in products[:5]]  # Use first 5 for key
+                cache_key = create_cache_key(product_names, product_query or "")
+                
+                cached_result = self._cache.get(cache_key)
+                if cached_result is not None:
+                    logger.info("Using cached attribute analysis results")
+                    return cached_result, "output_1"
+                
+                from contract_engine.llm_helpers import analyze_product_differences
+                analysis = ""
+                try:
+                    analysis = analyze_product_differences(products)
+                    attributes = self._extract_attributes_from_analysis(analysis, product_query)
+                except Exception as e:
+                    logger.warning(f"LLM attribute analysis failed, using fallback: {e}")
+                    attributes = self._get_fallback_attributes(product_query)
+                
+                output = {
+                    "products": products,
+                    "analysis": analysis,
+                    "extracted_attributes": attributes
+                }
+                
+                self._cache.set(cache_key, output)
+                
+                return output, "output_1"
             except Exception as e:
-                logger.warning(f"LLM attribute analysis failed, using fallback: {e}")
-                attributes = ["price", "brand", "capacity", "energy_efficiency", "size", "features"]
-            
-            output = {
-                "products": products,
-                "analysis": analysis,
-                "extracted_attributes": attributes
-            }
-            return output, "output_1"
-        except Exception as e:
-            logger.error(f"Exception in AttributeAnalyzerComponent: {e}", exc_info=True)
-            return {"products": products, "extracted_attributes": [], "error": str(e)}, "output_1"
+                logger.error(f"Exception in AttributeAnalyzerComponent: {e}", exc_info=True)
+                return {"products": products, "extracted_attributes": [], "error": str(e)}, "output_1"
     
     def _extract_attributes_from_analysis(self, analysis: str, product_query: str) -> List[str]:
+        """Extract attributes from LLM analysis with fallback to category-based attributes."""
+        if analysis and len(analysis) > 50:
+            analysis_lower = analysis.lower()
+            found_attributes = []
+            
+            attribute_patterns = [
+                "price", "cost", "brand", "manufacturer", "size", "capacity", 
+                "memory", "storage", "processor", "cpu", "gpu", "screen", "display",
+                "battery", "camera", "energy", "efficiency", "rating", "features",
+                "cooling", "power", "consumption", "type", "model"
+            ]
+            
+            for attr in attribute_patterns:
+                if attr in analysis_lower:
+                    found_attributes.append(attr)
+            
+            if len(found_attributes) >= 3:
+                return found_attributes[:6]  # Return top 6 attributes
+        
+        # Fallback to category-based attributes
+        return self._get_fallback_attributes(product_query)
+    
+    def _get_fallback_attributes(self, product_query: str) -> List[str]:
+        """Get fallback attributes based on product category."""
         common_attributes = {
             "gpu": ["memory", "cooling", "brand", "power consumption", "size"],
             "washing": ["capacity", "type", "energy rating", "size", "features"],
             "laptop": ["processor", "memory", "storage", "screen size", "battery"],
-            "phone": ["storage", "camera", "battery", "screen size", "brand"]
+            "phone": ["storage", "camera", "battery", "screen size", "brand"],
+            "tv": ["screen size", "resolution", "brand", "smart features", "price"],
+            "headphone": ["brand", "type", "battery", "noise cancellation", "price"],
+            "camera": ["megapixels", "lens", "brand", "battery", "features"]
         }
+        
+        if not product_query:
+            return ["brand", "price range", "features", "size"]
         
         query_lower = product_query.lower()
         for category, attrs in common_attributes.items():
