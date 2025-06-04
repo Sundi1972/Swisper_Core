@@ -28,12 +28,12 @@
 - [x] Write integration tests
 - [x] Verify: `poetry run pytest tests/test_preference_match_pipeline.py` (16/16 tests pass)
 
-## Step 5: FSM State Structure
-- [ ] Break down monolithic `next()` method
-- [ ] Add `StateTransition` class
-- [ ] Create state-specific functions
-- [ ] Ensure existing tests pass
-- [ ] Verify: `poetry run pytest tests/test_fsm_integration.py`
+## Step 5: FSM State Structure ✅ COMPLETED
+- [x] Break down monolithic `next()` method
+- [x] Add `StateTransition` class
+- [x] Create state-specific functions
+- [x] Ensure existing tests pass
+- [x] Verify: `poetry run pytest tests/test_fsm_state_handlers.py`
 
 ## Step 6: FSM + Product Search
 - [ ] Replace direct search with pipeline calls

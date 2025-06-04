@@ -9,6 +9,11 @@ import os # For makedirs
 # Import the real search function (with mock fallback)
 from tool_adapter.mock_google import google_shopping_search as search_product
 from .context import SwisperContext
+from .state_transitions import (
+    StateTransition, ContractState, 
+    create_success_transition, create_error_transition, 
+    create_user_input_transition, create_completion_transition
+)
 
 # LLM Helper functions are no longer used by the slimmed FSM
 # from engine.llm_helpers import (
@@ -78,14 +83,589 @@ class ContractStateMachine:
         self.logger.info(f"Parameters filled for session {self.context.session_id}: {param_data}")
 
     def next(self, user_input: Optional[str] = None) -> Dict[str, Any]:
+        """Main FSM transition method - now delegates to state handlers"""
         if self.contract is None:
             return {"status": "error", "message": "Contract not loaded"}
-            
-        parameters = self.contract.get("parameters", {})
+        
+        session_id = self._get_session_id()
+        self.logger.info(f"FSM (session: {session_id}): Current state: {self.context.current_state}, Input: '{user_input}'")
+        
+        state_handlers = {
+            "start": self.handle_start_state,
+            "search": self.handle_search_state,
+            "analyze_attributes": self.handle_analyze_attributes_state,
+            "ask_clarification": self.handle_ask_clarification_state,
+            "wait_for_preferences": self.handle_wait_for_preferences_state,
+            "filter_products": self.handle_filter_products_state,
+            "check_compatibility": self.handle_check_compatibility_state,
+            "rank_and_select": self.handle_rank_and_select_state,
+            "present_options": self.handle_rank_and_select_state,  # Map present_options to rank_and_select
+            "confirm_selection": self.handle_confirm_selection_state,
+            "confirm_order": self.handle_confirm_order_state,
+            "completed": self.handle_completed_state,
+            "cancelled": self.handle_cancelled_state,
+            "error": self.handle_error_state
+        }
+        
+        handler = state_handlers.get(self.context.current_state)
+        if not handler:
+            self.logger.error(f"FSM (session: {session_id}): Unknown state: {self.context.current_state}")
+            return {"status": "failed", "message": f"Contract entered an invalid state: {self.context.current_state}"}
+        
+        try:
+            transition = handler(user_input)
+            return self._process_state_transition(transition)
+        except Exception as e:
+            self.logger.error(f"FSM (session: {session_id}): Error in state handler: {e}")
+            return {"status": "failed", "message": f"Error processing state {self.context.current_state}"}
         session_id = self.context.session_id
 
         self.logger.info(f"FSM (session: {session_id}): Current state: {self.context.current_state}, Input: '{user_input}'")
 
+    def _get_session_id(self) -> str:
+        """Get session ID from contract parameters"""
+        return self.contract.get("parameters", {}).get("session_id", "unknown")
+    
+    def _handle_cancel_request(self, user_input: str, session_id: str) -> Optional[StateTransition]:
+        """Check if user input is a cancel request and handle it"""
+        try:
+            from contract_engine.llm_helpers import is_cancel_request
+            if is_cancel_request(user_input):
+                self.contract["status"] = "cancelled_by_user"
+                return create_success_transition(
+                    next_state=ContractState.CANCELLED,
+                    user_message="Purchase cancelled. Is there anything else I can help you with?",
+                    context_updates={"is_cancelled": True}
+                )
+        except Exception as e:
+            self.logger.warning(f"⚠️ FSM (session: {session_id}): Cancel check failed, continuing: {e}")
+        return None
+    
+    def _process_state_transition(self, transition: StateTransition) -> Dict[str, Any]:
+        """Process a state transition and update context accordingly"""
+        for key, value in transition.context_updates.items():
+            if hasattr(self.context, key):
+                setattr(self.context, key, value)
+        
+        for key, value in transition.contract_updates.items():
+            self.contract[key] = value
+        
+        if transition.next_state and transition.next_state.value != self.context.current_state:
+            self.context.update_state(transition.next_state.value)
+        
+        if transition.tools_used:
+            self.context.tools_used.extend(transition.tools_used)
+        
+        result = transition.to_dict()
+        
+        if transition.next_state and not transition.requires_user_input() and not transition.is_terminal():
+            return self.next()
+        
+        return result
+    
+    def handle_start_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the start state - check if product is set and transition to search"""
+        session_id = self._get_session_id()
+        
+        if not self.context.product_query:
+            self.logger.warning(f"FSM (session: {session_id}): Product not set in 'start' state. Asking user.")
+            return create_user_input_transition("What product are you looking for?")
+        
+        self.logger.info(f"FSM (session: {session_id}): Transition: start → search")
+        return create_success_transition(next_state=ContractState.SEARCH)
+    
+    def handle_search_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the search state - perform product search and analyze results"""
+        session_id = self._get_session_id()
+        
+        if not self.context.product_query:
+            self.logger.error(f"FSM (session: {session_id}): Product query is empty in 'search' state.")
+            return create_error_transition("No product specified for search.")
+        
+        self.logger.info(f"🔍 FSM (session: {session_id}): Searching for '{self.context.product_query}'")
+        
+        try:
+            search_results = search_product(q=self.context.product_query)
+            
+            if not search_results:
+                self.logger.warning(f"FSM (session: {session_id}): No products found for '{self.context.product_query}'")
+                return create_user_input_transition(
+                    f"I couldn't find any products matching '{self.context.product_query}'. Could you try a different search term or be more specific?"
+                )
+            
+            self.logger.info(f"FSM (session: {session_id}): Found {len(search_results)} products")
+            
+            context_updates = {
+                "search_results": search_results
+            }
+            tools_used = ["search_product"]
+            
+            if len(search_results) > 50:
+                self.logger.info(f"FSM (session: {session_id}): Too many results ({len(search_results)}), moving to analyze_attributes for refinement")
+                next_state = ContractState.EXTRACT_ENTITIES
+            else:
+                self.logger.info(f"FSM (session: {session_id}): Manageable number of results ({len(search_results)}), moving to rank_and_select")
+                next_state = ContractState.PRESENT_OPTIONS
+            
+            return create_success_transition(
+                next_state=next_state,
+                context_updates=context_updates,
+                tools_used=tools_used
+            )
+            
+        except Exception as e:
+            self.logger.error(f"FSM (session: {session_id}): Search failed: {e}")
+            return create_user_input_transition(
+                f"I encountered an error while searching for '{self.context.product_query}'. Could you try again or rephrase your request?"
+            )
+    
+    def handle_analyze_attributes_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the analyze_attributes state"""
+        session_id = self._get_session_id()
+        self.logger.info(f"🔍 FSM (session: {session_id}): In analyze_attributes state")
+        
+        try:
+            from contract_engine.llm_helpers import analyze_product_attributes
+            
+            analysis = analyze_product_attributes(self.context.search_results, self.context.product_query)
+            extracted_attributes = self._extract_attributes_from_analysis(analysis, self.context.product_query)
+            
+            context_updates = {"extracted_attributes": extracted_attributes}
+            contract_updates = {"parameters": {**self.contract.get("parameters", {}), "extracted_attributes": extracted_attributes}}
+            tools_used = ["analyze_product_attributes"]
+            
+            self.logger.info(f"FSM (session: {session_id}): Extracted {len(extracted_attributes)} attributes. Transition: analyze_attributes → ask_clarification")
+            
+            return create_success_transition(
+                next_state=ContractState.COLLECT_PREFERENCES,
+                context_updates=context_updates,
+                contract_updates=contract_updates,
+                tools_used=tools_used
+            )
+            
+        except Exception as e:
+            self.logger.error(f"FSM (session: {session_id}): Attribute analysis failed: {e}")
+            return create_success_transition(next_state=ContractState.PRESENT_OPTIONS)
+    
+    def handle_ask_clarification_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the ask_clarification state"""
+        session_id = self._get_session_id()
+        extracted_attributes = self.contract["parameters"].get("extracted_attributes", [])
+        
+        if extracted_attributes:
+            attributes_text = ", ".join(extracted_attributes)
+            clarification_message = (
+                f"I found many options for '{self.context.product_query}'. "
+                f"To help narrow down the search, could you tell me your preferences for: {attributes_text}? "
+                f"For example, what's your budget, preferred brand, or specific features you need?"
+            )
+        else:
+            clarification_message = f"I found many options for '{self.context.product_query}'. Could you tell me more about what you're looking for? For example, your budget, preferred brand, or specific features?"
+        
+        self.logger.info(f"FSM (session: {session_id}): Asking for clarification. Transition: ask_clarification → wait_for_preferences")
+        
+        return StateTransition(
+            next_state=ContractState.COLLECT_PREFERENCES,
+            ask_user=clarification_message,
+            status="waiting_for_input"
+        )
+    
+    def handle_wait_for_preferences_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the wait_for_preferences state"""
+        session_id = self._get_session_id()
+        self.logger.info(f"🎯 FSM (session: {session_id}): Processing user preferences: '{user_input}'")
+        
+        if not user_input:
+            return create_user_input_transition("Could you please tell me your preferences? For example, your budget, preferred brand, or specific features you need.")
+        
+        try:
+            from contract_engine.llm_helpers import analyze_user_preferences
+            
+            try:
+                preference_analysis = analyze_user_preferences(
+                    user_input, 
+                    self.context.product_query, 
+                    self.context.extracted_attributes
+                )
+                
+                if isinstance(preference_analysis, dict):
+                    preferences = preference_analysis.get("preferences", {})
+                    constraints = preference_analysis.get("constraints", [])
+                else:
+                    self.logger.warning(f"FSM (session: {session_id}): Unexpected preference analysis format, using fallback")
+                    fallback_analysis = self._fallback_preference_analysis(user_input)
+                    preferences = fallback_analysis.get("preferences", {})
+                    constraints = fallback_analysis.get("constraints", [])
+                
+                tools_used = ["analyze_user_preferences"]
+                
+            except Exception as e:
+                self.logger.warning(f"FSM (session: {session_id}): LLM preference analysis failed, using fallback: {e}")
+                fallback_analysis = self._fallback_preference_analysis(user_input)
+                preferences = fallback_analysis.get("preferences", {})
+                constraints = fallback_analysis.get("constraints", [])
+                tools_used = []
+            
+            context_updates = {
+                "preferences": preferences,
+                "constraints": constraints
+            }
+            
+            self.logger.info(f"FSM (session: {session_id}): Extracted preferences: {preferences}")
+            self.logger.info(f"FSM (session: {session_id}): Extracted constraints: {constraints}")
+            
+            if len(self.context.search_results) > 20:
+                self.logger.info(f"FSM (session: {session_id}): Many products ({len(self.context.search_results)}), applying filtering. Transition: wait_for_preferences → filter_products")
+                next_state = ContractState.MATCH_PREFERENCES
+            elif len(self.context.search_results) > 10:
+                self.logger.info(f"FSM (session: {session_id}): Moderate products ({len(self.context.search_results)}), checking compatibility. Transition: wait_for_preferences → check_compatibility")
+                next_state = ContractState.MATCH_PREFERENCES
+            else:
+                self.logger.info(f"FSM (session: {session_id}): Few products ({len(self.context.search_results)}), proceeding to ranking. Transition: wait_for_preferences → rank_and_select")
+                next_state = ContractState.MATCH_PREFERENCES
+            
+            return create_success_transition(
+                next_state=next_state,
+                context_updates=context_updates,
+                tools_used=tools_used
+            )
+            
+        except Exception as e:
+            self.logger.error(f"❌ FSM (session: {session_id}): Error analyzing preferences: {e}")
+            return create_success_transition(next_state=ContractState.MATCH_PREFERENCES)
+    
+    def handle_filter_products_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the filter_products state"""
+        session_id = self._get_session_id()
+        self.logger.info(f"🔍 FSM (session: {session_id}): Filtering products with LLM")
+        
+        try:
+            from contract_engine.llm_helpers import filter_products_with_llm
+            
+            if self.context.preferences or self.context.constraints:
+                self.logger.info(f"📊 FSM (session: {session_id}): Filtering {len(self.context.search_results)} products using preferences and constraints")
+                try:
+                    filtered_products = filter_products_with_llm(
+                        self.context.search_results, 
+                        self.context.preferences,
+                        self.context.constraints
+                    )
+                    context_updates = {"search_results": filtered_products}
+                    self.logger.info(f"📋 FSM (session: {session_id}): Filtered list: {len(filtered_products)} products remaining")
+                except Exception as e:
+                    self.logger.warning(f"⚠️ FSM (session: {session_id}): LLM filtering failed, using fallback: {e}")
+                    fallback_products = self.context.search_results[:10]
+                    context_updates = {"search_results": fallback_products}
+                    self.logger.info(f"📋 FSM (session: {session_id}): Using top {len(fallback_products)} products as fallback")
+            else:
+                self.logger.info(f"⚠️ FSM (session: {session_id}): No preferences or constraints to filter with")
+                context_updates = {}
+            
+            self.logger.info(f"🔄 FSM (session: {session_id}): Transition: filter_products → match_preferences")
+            return create_success_transition(
+                next_state=ContractState.MATCH_PREFERENCES,
+                context_updates=context_updates
+            )
+            
+        except Exception as e:
+            self.logger.error(f"❌ FSM (session: {session_id}): Error filtering products: {e}")
+            return create_success_transition(next_state=ContractState.MATCH_PREFERENCES)
+    
+    def handle_check_compatibility_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the check_compatibility state"""
+        session_id = self._get_session_id()
+        
+        try:
+            from contract_engine.llm_helpers import check_product_compatibility
+            
+            enhanced_products = self._enhance_with_web_search(self.context.search_results, self.context.constraints, self.context.product_query)
+            
+            try:
+                compatibility_results = check_product_compatibility(
+                    enhanced_products, 
+                    self.context.constraints, 
+                    self.context.product_query
+                )
+                
+                compatible_products = []
+                for i, result in enumerate(compatibility_results):
+                    if result.get("compatible", False) and i < len(enhanced_products):
+                        compatible_products.append(enhanced_products[i])
+                
+                if compatible_products:
+                    context_updates = {"search_results": compatible_products}
+                    self.logger.info(f"FSM (session: {session_id}): Found {len(compatible_products)} compatible products. Transition: check_compatibility → rank_and_select")
+                else:
+                    context_updates = {}
+                    self.logger.info(f"FSM (session: {session_id}): No compatible products found. Transition: check_compatibility → rank_and_select")
+                    
+            except Exception as e:
+                self.logger.warning(f"⚠️ FSM (session: {session_id}): Compatibility check failed, assuming all products compatible: {e}")
+                context_updates = {}
+            
+            return create_success_transition(
+                next_state=ContractState.PRESENT_OPTIONS,
+                context_updates=context_updates
+            )
+            
+        except Exception as e:
+            self.logger.error(f"❌ FSM (session: {session_id}): Error checking compatibility: {e}")
+            return create_success_transition(next_state=ContractState.PRESENT_OPTIONS)
+    
+    def handle_rank_and_select_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the rank_and_select state"""
+        session_id = self._get_session_id()
+        self.logger.info(f"🏆 FSM (session: {session_id}): In rank_and_select state")
+        
+        top_products = self.rank_and_select(self.context.search_results, self.context.preferences)
+        
+        if not top_products:
+            self.logger.error(f"❌ FSM (session: {session_id}): No products to rank and select")
+            return create_user_input_transition("No suitable products were found. Would you like to try a different search?")
+        
+        self.logger.info(f"🏆 FSM (session: {session_id}): Ranking {len(top_products)} products")
+        
+        try:
+            from contract_engine.llm_helpers import generate_product_recommendation
+            recommendation_data = generate_product_recommendation(
+                top_products, 
+                self.context.preferences, 
+                self.context.constraints
+            )
+        except Exception as e:
+            self.logger.warning(f"LLM recommendation failed, using fallback: {e}")
+            recommendation_data = self._fallback_product_recommendation(top_products)
+        
+        context_updates = {
+            "product_recommendations": recommendation_data,
+            "top_products": top_products
+        }
+        
+        numbered_list = "\n".join([
+            f"{item['number']}. {item['name']} - {item['price']} ({item['key_specs']})"
+            for item in recommendation_data.get("numbered_products", [])
+        ])
+        
+        recommendation = recommendation_data.get("recommendation", {})
+        recommended_choice = recommendation.get("choice", 1)
+        reasoning = recommendation.get("reasoning", "Best overall value")
+        
+        self.logger.info(f"🏆 FSM (session: {session_id}): Generated top {len(top_products)} recommendations")
+        self.logger.info(f"🔄 FSM (session: {session_id}): Transition: rank_and_select → confirm_selection")
+        
+        num_products = len(top_products)
+        ask_user_message = (
+            f"Here are the top 5 options:\n\n{numbered_list}\n\n"
+            f"My recommendation: Option {recommended_choice}\n"
+            f"Reason: {reasoning}\n\n"
+            f"Please enter the number (1-{num_products}) of your choice, or type 'yes' to go with my recommendation."
+        )
+        
+        return StateTransition(
+            next_state=ContractState.CONFIRM_PURCHASE,
+            ask_user=ask_user_message,
+            status="waiting_for_input",
+            context_updates=context_updates
+        )
+    
+    def handle_confirm_selection_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the confirm_selection state"""
+        session_id = self._get_session_id()
+        self.logger.info(f"✅ FSM (session: {session_id}): In confirm_selection state, user_input: '{user_input}'")
+        
+        cancel_transition = self._handle_cancel_request(user_input, session_id)
+        if cancel_transition:
+            return cancel_transition
+        
+        selected_product = None
+        
+        if user_input and user_input.lower() in ["yes", "y", "ok", "okay", "sure"]:
+            recommendation = self.context.product_recommendations.get("recommendation", {})
+            choice_number = recommendation.get("choice", 1)
+            if choice_number <= len(self.context.top_products):
+                selected_product = self.context.top_products[choice_number - 1]
+
+        elif user_input and user_input.strip().isdigit():
+            choice_number = int(user_input.strip())
+            if 1 <= choice_number <= len(self.context.top_products):
+                selected_product = self.context.top_products[choice_number - 1]
+            else:
+                return create_user_input_transition(
+                    f"Please enter a number between 1 and {len(self.context.top_products)}, or 'yes' for my recommendation."
+                )
+        
+        if selected_product:
+            subtask = {
+                "id": "select_product",
+                "type": "user_selection",
+                "status": "completed",
+                "output": selected_product,
+                "user_choice": user_input
+            }
+            
+            context_updates = {
+                "selected_product": selected_product,
+                "confirmation_pending": True
+            }
+            
+            contract_updates = {
+                "subtasks": self.contract.get("subtasks", []) + [subtask]
+            }
+            
+            product_name = selected_product.get("name", "this product")
+            product_price = selected_product.get("price")
+            price_info = f" at {product_price} CHF" if product_price is not None else ""
+            
+            self.logger.info(f"FSM (session: {session_id}): User selected {product_name}. Transition: confirm_selection → confirm_order")
+            
+            return StateTransition(
+                next_state=ContractState.CONFIRM_PURCHASE,
+                ask_user=f"You selected: {product_name}{price_info}. Shall I go ahead and confirm this order?",
+                status="waiting_for_input",
+                context_updates=context_updates,
+                contract_updates=contract_updates
+            )
+        else:
+            return create_user_input_transition("I didn't understand your selection. Please enter a number (1-5) or 'yes' for my recommendation.")
+    
+    def handle_confirm_order_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the confirm_order state"""
+        session_id = self._get_session_id()
+        self.logger.info(f"FSM (session: {session_id}): In confirm_order, user_input: '{user_input}'")
+        
+        cancel_transition = self._handle_cancel_request(user_input, session_id)
+        if cancel_transition:
+            return cancel_transition
+        
+        product_name = self.context.selected_product.get("name", "the product") if self.context.selected_product else "the product"
+        product_price = self.context.selected_product.get("price", "price not available") if self.context.selected_product else "price not available"
+        product_context = f"{product_name} at {product_price} CHF"
+        
+        try:
+            from contract_engine.llm_helpers import is_response_relevant
+            
+            try:
+                relevance_check = is_response_relevant(
+                    user_input, 
+                    "yes/no confirmation for product purchase", 
+                    product_context
+                )
+                
+                if not relevance_check.get("is_relevant", True):
+                    return create_user_input_transition(
+                        f"I didn't understand your response. Please answer 'yes' to confirm the purchase "
+                        f"of {product_name} at {product_price} CHF, 'no' to decline, or 'cancel' to exit."
+                    )
+            except Exception as e:
+                self.logger.warning(f"⚠️ FSM (session: {session_id}): Relevance check failed, treating as unclear response: {e}")
+        except ImportError:
+            pass
+        
+        if user_input and user_input.lower() in ["yes", "y", "confirm", "ok", "okay", "proceed", "sure"]:
+            subtask = {
+                "id": "confirm_order",
+                "type": "confirmation",
+                "status": "completed",
+                "response": user_input
+            }
+            
+            context_updates = {"confirmation_pending": False}
+            contract_updates = {"subtasks": self.contract.get("subtasks", []) + [subtask]}
+            
+            self.logger.info(f"FSM (session: {session_id}): Order confirmed by user. Transition: confirm_order → completed")
+            
+            return create_success_transition(
+                next_state=ContractState.COMPLETED,
+                context_updates=context_updates,
+                contract_updates=contract_updates
+            )
+            
+        elif user_input and user_input.lower() in ["no", "n", "decline", "reject"]:
+            self.logger.info(f"FSM (session: {session_id}): Order declined by user.")
+            
+            contract_updates = {"status": "cancelled_by_user"}
+            context_updates = {
+                "contract_status": "cancelled",
+                "is_cancelled": True
+            }
+            
+            return StateTransition(
+                next_state=ContractState.CANCELLED,
+                status="cancelled",
+                user_message="Order cancelled. Is there anything else I can help you with?",
+                context_updates=context_updates,
+                contract_updates=contract_updates
+            )
+        else:
+            return create_user_input_transition(
+                f"I didn't understand your response. Please answer 'yes' to confirm the purchase of {product_name} at {product_price} CHF, or 'no' to decline."
+            )
+    
+    def handle_completed_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the completed state"""
+        session_id = self._get_session_id()
+        self.logger.info(f"FSM (session: {session_id}): Contract is completed.")
+        
+        contract_updates = {
+            "status": "completed",
+            "order_confirmed": True,
+            "completed_at": datetime.datetime.now().isoformat()
+        }
+        
+        context_updates = {"contract_status": "completed"}
+        
+        try:
+            artifact_dir = "tmp/contracts"
+            os.makedirs(artifact_dir, exist_ok=True)
+            artifact_path = os.path.join(artifact_dir, f"{session_id}.json")
+            self.save_final_contract(filename=artifact_path)
+        except Exception as e:
+            self.logger.error(f"FSM (session: {session_id}): Failed to save final contract: {e}", exc_info=True)
+        
+        return StateTransition(
+            next_state=ContractState.COMPLETED,
+            status="completed",
+            context_updates=context_updates,
+            contract_updates=contract_updates
+        )
+    
+    def handle_cancelled_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the cancelled state"""
+        session_id = self._get_session_id()
+        self.logger.info(f"FSM (session: {session_id}): Contract is in cancelled state.")
+        
+        contract_updates = {"status": "cancelled"}
+        context_updates = {
+            "contract_status": "cancelled",
+            "is_cancelled": True
+        }
+        
+        return StateTransition(
+            next_state=ContractState.CANCELLED,
+            status="cancelled",
+            user_message="The purchase has been cancelled. Is there anything else I can help you with?",
+            context_updates=context_updates,
+            contract_updates=contract_updates
+        )
+    
+    def handle_error_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the error state"""
+        session_id = self._get_session_id()
+        self.logger.error(f"FSM (session: {session_id}): FSM is in an error state, likely due to template loading failure.")
+        
+        context_updates = {"contract_status": "error"}
+        
+        return StateTransition(
+            next_state=ContractState.FAILED,
+            status="failed",
+            user_message="FSM critical error (e.g. template not loaded).",
+            context_updates=context_updates
+        )
+
+    def _legacy_next_fallback(self, user_input: Optional[str] = None) -> Dict[str, Any]:
+        """Legacy fallback for any remaining state logic"""
+        session_id = self._get_session_id()
+        
         if self.context.current_state == "start":
             if not self.context.product_query:
                 self.logger.warning(f"FSM (session: {session_id}): Product not set in 'start' state. Asking user.")
@@ -117,7 +697,7 @@ class ContractStateMachine:
             if not results or (isinstance(results, list) and results and results[0].get("error")):
                 self.logger.warning(f"FSM (session: {session_id}): No products found or error from search for '{self.context.product_query}'. Results: {results}")
             
-            threshold = parameters.get("product_threshold", 10)
+            threshold = self.contract.get("parameters", {}).get("product_threshold", 10)
             if len(results) > threshold:
                 self.logger.info(f"📊 FSM (session: {session_id}): Found {len(results)} products (>{threshold}). Analyzing attributes...")
                 
