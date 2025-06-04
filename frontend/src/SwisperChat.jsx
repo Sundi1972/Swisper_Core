@@ -138,10 +138,10 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
         setMessages(parsedMessages);
       } else {
         try {
-          const response = await fetch(`http://localhost:8000/api/sessions/${targetSessionId}/messages`);
+          const response = await fetch(`http://localhost:8000/api/sessions/${targetSessionId}/history`);
           if (response.ok) {
             const data = await response.json();
-            setMessages(data.messages || [{ role: "assistant", content: "Hi, how can I help you today?" }]);
+            setMessages(data.history || [{ role: "assistant", content: "Hi, how can I help you today?" }]);
           } else {
             setMessages([{ role: "assistant", content: "Hi, how can I help you today?" }]);
           }
@@ -163,7 +163,7 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
       const regex = new RegExp(`(${escapedQuery})`, 'gi');
       
       const parts = content.split(regex);
-      return parts.map((part, index) => {
+      return parts.map((part) => {
         if (regex.test(part)) {
           return `<span class="bg-orange-300 text-black px-1 rounded font-medium">${part}</span>`;
         }
