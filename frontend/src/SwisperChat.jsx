@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
 
-const SwisperChat = forwardRef((props, ref) => {
+const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, ref) => {
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Hi, how can I help you today?" }
   ]);
@@ -155,6 +155,26 @@ const SwisperChat = forwardRef((props, ref) => {
     }
   };
 
+  const highlightSearchTerms = (content, query) => {
+    try {
+      if (!query.trim() || !highlightEnabled) return content;
+      
+      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedQuery})`, 'gi');
+      
+      const parts = content.split(regex);
+      return parts.map((part, index) => {
+        if (regex.test(part)) {
+          return `<span class="bg-orange-300 text-black px-1 rounded font-medium">${part}</span>`;
+        }
+        return part;
+      }).join('');
+    } catch (error) {
+      console.error('Error highlighting search terms:', error);
+      return content;
+    }
+  };
+
   const scrollToMessage = (messageIndex) => {
     setTimeout(() => {
       const messageElements = document.querySelectorAll('[data-message-index]');
@@ -232,10 +252,25 @@ const SwisperChat = forwardRef((props, ref) => {
                       em: ({children}) => <em className="italic text-[#f9fbfc]">{children}</em>
                     }}
                   >
-                    {msg.content}
+                    {searchQuery && highlightEnabled ? (
+                      <div dangerouslySetInnerHTML={{
+                        __html: highlightSearchTerms(msg.content, searchQuery)
+                      }} />
+                    ) : (
+                      msg.content
+                    )}
                   </ReactMarkdown>
                 ) : (
-                  <p style={{ whiteSpace: 'pre-line' }}>{msg.content}</p>
+                  searchQuery && highlightEnabled ? (
+                    <div 
+                      style={{ whiteSpace: 'pre-line' }}
+                      dangerouslySetInnerHTML={{
+                        __html: highlightSearchTerms(msg.content, searchQuery)
+                      }}
+                    />
+                  ) : (
+                    <p style={{ whiteSpace: 'pre-line' }}>{msg.content}</p>
+                  )
                 )}
               </div>
             </div>

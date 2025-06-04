@@ -13,6 +13,7 @@ interface SearchResult {
 interface HeaderProps {
   onSearch?: (query: string) => void;
   onSearchResultSelect?: (sessionId: string, messageIndex: number) => void;
+  onSearchQueryChange?: (query: string) => void;
   isFullWidth?: boolean;
   onToggleFullWidth?: () => void;
   onToggleSidebar?: () => void;
@@ -22,6 +23,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({
   onSearch = () => {},
   onSearchResultSelect = () => {},
+  onSearchQueryChange = () => {},
   isFullWidth = false,
   onToggleFullWidth = () => {},
   onToggleSidebar = () => {},
@@ -37,6 +39,13 @@ const Header: React.FC<HeaderProps> = ({
     const query = e.target.value;
     setSearchQuery(query);
     onSearch(query);
+    
+    onSearchQueryChange(query);
+    
+    if (query.trim().length === 0) {
+      onSearchQueryChange('');
+      setShowResults(false);
+    }
     
     if (query.trim().length > 2) {
       performSearch(query);
