@@ -24,16 +24,18 @@ The infinite loop between `search → refine_constraints` states is caused by co
 
 ## Implementation Strategy
 
-### 1. Unify Session Storage Mechanisms
+### 1. Immediate Big-Bang Replacement of Session Storage Mechanisms
 
-**Current State**: Two parallel storage systems
+**Current State**: Two parallel storage systems causing conflicts
 - `PipelineSessionManager` in `session_persistence.py`
 - Direct PostgreSQL storage in `postgres_session_store.py`
 
-**Target State**: Single unified storage layer
-- Consolidate into enhanced PostgreSQL session store
-- Remove storage layer conflicts
-- Ensure atomic state transitions
+**Target State**: Complete immediate replacement with unified high-performance storage
+- **Big-Bang Approach**: Remove all dual storage mechanisms immediately
+- Replace all `save_session_context()` calls with unified store
+- Update all `load_session_context()` calls to use unified store
+- No gradual migration - complete replacement in single deployment
+- Ensure atomic state transitions with rollback capability
 
 ### 2. Fix State Serialization/Deserialization
 
@@ -64,23 +66,42 @@ The infinite loop between `search → refine_constraints` states is caused by co
 2. Identify exact point where state corruption occurs
 3. Document current serialization format inconsistencies
 
-### Task 2: Create Unified Session Storage Interface
+### Task 2: Create High-Performance Unified Session Storage Interface
 **New File**: `contract_engine/unified_session_store.py`
 
 **Implementation**:
 ```python
 class UnifiedSessionStore:
-    """Single source of truth for FSM session persistence"""
+    """High-performance single source of truth for FSM session persistence"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        # Connection pooling for high performance
+        self._connection_pool = None
+        self._cache = {}  # In-memory cache for frequently accessed sessions
     
     def save_fsm_state(self, session_id: str, fsm: ContractStateMachine) -> bool:
-        """Atomically save FSM state with validation"""
+        """High-performance atomic FSM state save with validation"""
         
     def load_fsm_state(self, session_id: str) -> Optional[ContractStateMachine]:
-        """Load FSM state with integrity validation"""
+        """High-performance FSM state load with caching and integrity validation"""
         
     def validate_state_integrity(self, context_dict: Dict) -> bool:
-        """Validate state consistency before save/load"""
+        """Fast state consistency validation"""
+        
+    def _get_cached_state(self, session_id: str) -> Optional[Dict]:
+        """High-performance cache lookup"""
+        
+    def _cache_state(self, session_id: str, state_dict: Dict):
+        """Cache state for performance optimization"""
 ```
+
+**Performance Features**:
+- Connection pooling for database operations
+- In-memory caching for frequently accessed sessions
+- Optimized serialization/deserialization
+- Target: <10ms for save/load operations
+- Batch operations support for high throughput
 
 ### Task 3: Fix Context Serialization
 **Files**: `contract_engine/context.py`
@@ -98,10 +119,47 @@ class UnifiedSessionStore:
 - Add pre/post state transition validation
 - Implement rollback mechanism for failed transitions
 
-### Task 5: Migrate Existing Session Data
-**New File**: `scripts/migrate_session_storage.py`
+### Task 5: Add High-Performance Logging-Only Monitoring
+**New File**: `contract_engine/fsm_monitoring.py`
 
-**Purpose**: Safely migrate existing sessions to unified storage format
+**Implementation**:
+```python
+class FSMStateMonitor:
+    """High-performance logging-only monitoring for FSM state corruption detection"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        # Lightweight in-memory metrics for performance
+        self.transition_counts = defaultdict(int)
+        self.recent_transitions = defaultdict(lambda: deque(maxlen=5))
+    
+    def track_state_transition(self, session_id: str, from_state: str, to_state: str, success: bool):
+        """High-performance state transition tracking with logging only"""
+        
+    def detect_infinite_loop(self, session_id: str) -> bool:
+        """Fast infinite loop detection using recent transition history"""
+        
+    def log_state_corruption(self, session_id: str, corruption_type: str, details: Dict):
+        """Log state corruption events (no external alerting)"""
+        
+    def get_performance_metrics(self) -> Dict[str, Any]:
+        """Lightweight performance metrics for health checks"""
+```
+
+**Monitoring Features**:
+- High-performance logging-only approach (no external integrations)
+- Lightweight in-memory metrics tracking
+- Fast infinite loop detection (>3 same transitions in 5 minutes)
+- Critical error logging for state corruption
+- Minimal performance overhead (<1ms per transition)
+
+### Task 6: Complete Legacy Storage Removal
+**Files to Remove/Update**: 
+- Remove dual storage logic from `contract_engine/session_persistence.py`
+- Update all references to use unified store only
+- Remove fallback mechanisms to legacy storage
+
+**Purpose**: Complete big-bang replacement with no legacy code remaining
 
 ---
 
@@ -210,11 +268,11 @@ def corrupted_session_data():
 3. Update FSM state transition logic
 4. **Validation**: All new tests pass
 
-### Phase 1D: Migration & Validation (1 ACU)
-1. Create session migration script
-2. Test with existing session data
-3. Validate no regressions in existing functionality
-4. **Validation**: Complete test suite passes
+### Phase 1D: Big-Bang Replacement & Monitoring (1 ACU)
+1. Implement high-performance logging-only FSM monitoring
+2. Complete immediate replacement of all dual storage mechanisms
+3. Remove legacy session storage code completely
+4. **Validation**: Complete test suite passes with unified storage only
 
 ---
 
@@ -250,9 +308,9 @@ def corrupted_session_data():
 - **Risk**: Unified storage adds latency
 - **Mitigation**: Benchmark current performance, optimize critical paths
 
-### Backward Compatibility
-- **Risk**: Breaking existing sessions
-- **Mitigation**: Gradual migration with fallback to old storage
+### Big-Bang Deployment Risk
+- **Risk**: Complete storage replacement may cause temporary disruption
+- **Mitigation**: Comprehensive testing, rollback plan, immediate monitoring
 
 ---
 
