@@ -55,8 +55,19 @@ const Header: React.FC<HeaderProps> = ({
       const response = await fetch(`http://localhost:8000/api/search?query=${encodeURIComponent(query)}${sessionParam}`);
       const data = await response.json();
       
-      setSearchResults(data.results || []);
-      setShowResults(true);
+      const results = data.results || [];
+      setSearchResults(results);
+      
+      const hasResultsFromOtherSessions = results.some((result: SearchResult) => 
+        result.session_id !== currentSessionId
+      );
+      
+      const shouldShowPopup = searchScope === 'current' 
+        ? results.length > 0 
+        : hasResultsFromOtherSessions;
+        
+      setShowResults(shouldShowPopup);
+      
     } catch (error) {
       console.error('Error searching:', error);
       setSearchResults([]);
