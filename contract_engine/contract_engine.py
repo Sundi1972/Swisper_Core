@@ -40,6 +40,10 @@ class ContractStateMachine:
             )
             return
 
+        # Initialize product search pipeline
+        from .pipelines.product_search_pipeline import create_product_search_pipeline
+        self.product_search_pipeline = create_product_search_pipeline()
+        
         # Initialize SwisperContext
         self.context = SwisperContext(
             session_id="default_fsm_session",
@@ -93,7 +97,8 @@ class ContractStateMachine:
         state_handlers = {
             "start": self.handle_start_state,
             "search": self.handle_search_state,
-            "analyze_attributes": self.handle_analyze_attributes_state,
+            "refine_constraints": self.handle_refine_constraints_state,
+            "analyze_attributes": self.handle_refine_constraints_state,  # Legacy mapping
             "ask_clarification": self.handle_ask_clarification_state,
             "wait_for_preferences": self.handle_wait_for_preferences_state,
             "filter_products": self.handle_filter_products_state,
@@ -113,14 +118,15 @@ class ContractStateMachine:
             return {"status": "failed", "message": f"Contract entered an invalid state: {self.context.current_state}"}
         
         try:
-            transition = handler(user_input)
+            import asyncio
+            if asyncio.iscoroutinefunction(handler):
+                transition = asyncio.run(handler(user_input))
+            else:
+                transition = handler(user_input)
             return self._process_state_transition(transition)
         except Exception as e:
             self.logger.error(f"FSM (session: {session_id}): Error in state handler: {e}")
             return {"status": "failed", "message": f"Error processing state {self.context.current_state}"}
-        session_id = self.context.session_id
-
-        self.logger.info(f"FSM (session: {session_id}): Current state: {self.context.current_state}, Input: '{user_input}'")
 
     def _get_session_id(self) -> str:
         """Get session ID from contract parameters"""
@@ -174,78 +180,109 @@ class ContractStateMachine:
         self.logger.info(f"FSM (session: {session_id}): Transition: start → search")
         return create_success_transition(next_state=ContractState.SEARCH)
     
-    def handle_search_state(self, user_input: Optional[str] = None) -> StateTransition:
-        """Handle the search state - perform product search and analyze results"""
+    async def handle_search_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the search state - perform product search using pipeline"""
         session_id = self._get_session_id()
         
         if not self.context.product_query:
             self.logger.error(f"FSM (session: {session_id}): Product query is empty in 'search' state.")
             return create_error_transition("No product specified for search.")
         
-        self.logger.info(f"🔍 FSM (session: {session_id}): Searching for '{self.context.product_query}'")
+        self.logger.info(f"🔍 FSM (session: {session_id}): Searching for '{self.context.product_query}' using pipeline")
         
         try:
-            search_results = search_product(q=self.context.product_query)
+            from .pipelines.product_search_pipeline import run_product_search
+            pipeline_result = await run_product_search(
+                pipeline=self.product_search_pipeline,
+                query=self.context.product_query,
+                hard_constraints=getattr(self.context, 'constraints', [])
+            )
             
-            if not search_results:
+            if pipeline_result.get("status") == "error":
+                self.logger.error(f"FSM (session: {session_id}): Pipeline search failed: {pipeline_result.get('error')}")
+                return create_user_input_transition(
+                    f"I encountered an error while searching for '{self.context.product_query}'. Could you try again or rephrase your request?"
+                )
+            
+            search_results = pipeline_result.get("items", [])
+            discovered_attributes = pipeline_result.get("attributes", [])
+            
+            context_updates = {
+                "search_results": search_results,
+                "extracted_attributes": discovered_attributes
+            }
+            tools_used = ["product_search_pipeline"]
+            
+            if pipeline_result.get("status") == "too_many_results":
+                self.logger.info(f"FSM (session: {session_id}): Too many results, moving to refine_constraints")
+                next_state = ContractState.REFINE_CONSTRAINTS
+                user_message = self._generate_constraint_refinement_message(discovered_attributes)
+                return StateTransition(
+                    next_state=next_state,
+                    ask_user=user_message,
+                    context_updates=context_updates,
+                    tools_used=tools_used
+                )
+            elif not search_results:
                 self.logger.warning(f"FSM (session: {session_id}): No products found for '{self.context.product_query}'")
                 return create_user_input_transition(
                     f"I couldn't find any products matching '{self.context.product_query}'. Could you try a different search term or be more specific?"
                 )
-            
-            self.logger.info(f"FSM (session: {session_id}): Found {len(search_results)} products")
-            
-            context_updates = {
-                "search_results": search_results
-            }
-            tools_used = ["search_product"]
-            
-            if len(search_results) > 50:
-                self.logger.info(f"FSM (session: {session_id}): Too many results ({len(search_results)}), moving to analyze_attributes for refinement")
-                next_state = ContractState.EXTRACT_ENTITIES
             else:
-                self.logger.info(f"FSM (session: {session_id}): Manageable number of results ({len(search_results)}), moving to rank_and_select")
+                self.logger.info(f"FSM (session: {session_id}): Pipeline found {len(search_results)} products, moving to present_options")
                 next_state = ContractState.PRESENT_OPTIONS
-            
-            return create_success_transition(
-                next_state=next_state,
-                context_updates=context_updates,
-                tools_used=tools_used
-            )
+                return create_success_transition(
+                    next_state=next_state,
+                    context_updates=context_updates,
+                    tools_used=tools_used
+                )
             
         except Exception as e:
-            self.logger.error(f"FSM (session: {session_id}): Search failed: {e}")
+            self.logger.error(f"FSM (session: {session_id}): Pipeline search failed: {e}")
             return create_user_input_transition(
                 f"I encountered an error while searching for '{self.context.product_query}'. Could you try again or rephrase your request?"
             )
     
-    def handle_analyze_attributes_state(self, user_input: Optional[str] = None) -> StateTransition:
-        """Handle the analyze_attributes state"""
+    def handle_refine_constraints_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the refine_constraints state - collect additional constraints from user"""
         session_id = self._get_session_id()
-        self.logger.info(f"🔍 FSM (session: {session_id}): In analyze_attributes state")
+        if not user_input:
+            # First time in this state - ask for constraints
+            extracted_attributes = getattr(self.context, 'extracted_attributes', [])
+            return create_user_input_transition(
+                self._generate_constraint_refinement_message(extracted_attributes)
+            )
+        
+        cancel_transition = self._handle_cancel_request(user_input, session_id)
+        if cancel_transition:
+            return cancel_transition
+        
+        self.logger.info(f"🔍 FSM (session: {session_id}): Processing constraint refinement: '{user_input}'")
         
         try:
-            from contract_engine.llm_helpers import analyze_product_attributes
+            new_constraints = self._parse_user_constraints(user_input)
+            current_constraints = getattr(self.context, 'constraints', [])
+            updated_constraints = current_constraints + new_constraints
             
-            analysis = analyze_product_attributes(self.context.search_results, self.context.product_query)
-            extracted_attributes = self._extract_attributes_from_analysis(analysis, self.context.product_query)
+            refinement_attempts = getattr(self.context, 'refinement_attempts', 0) + 1
             
-            context_updates = {"extracted_attributes": extracted_attributes}
-            contract_updates = {"parameters": {**self.contract.get("parameters", {}), "extracted_attributes": extracted_attributes}}
-            tools_used = ["analyze_product_attributes"]
+            context_updates = {
+                "constraints": updated_constraints,
+                "refinement_attempts": refinement_attempts
+            }
             
-            self.logger.info(f"FSM (session: {session_id}): Extracted {len(extracted_attributes)} attributes. Transition: analyze_attributes → ask_clarification")
+            # Re-run search with new constraints
+            self.logger.info(f"FSM (session: {session_id}): Re-running search with {len(updated_constraints)} constraints (attempt {refinement_attempts})")
             
-            return create_success_transition(
-                next_state=ContractState.COLLECT_PREFERENCES,
+            return StateTransition(
+                next_state=ContractState.SEARCH,
                 context_updates=context_updates,
-                contract_updates=contract_updates,
-                tools_used=tools_used
+                user_message=f"Let me search again with your additional criteria..."
             )
             
         except Exception as e:
-            self.logger.error(f"FSM (session: {session_id}): Attribute analysis failed: {e}")
-            return create_success_transition(next_state=ContractState.PRESENT_OPTIONS)
+            self.logger.error(f"FSM (session: {session_id}): Constraint refinement failed: {e}")
+            return create_error_transition(f"Failed to process your constraints: {e}")
     
     def handle_ask_clarification_state(self, user_input: Optional[str] = None) -> StateTransition:
         """Handle the ask_clarification state"""
@@ -661,6 +698,71 @@ class ContractStateMachine:
             user_message="FSM critical error (e.g. template not loaded).",
             context_updates=context_updates
         )
+    
+    def _generate_constraint_refinement_message(self, discovered_attributes: list) -> str:
+        """Generate a user-friendly message asking for constraint refinement"""
+        if discovered_attributes:
+            attribute_examples = ", ".join(discovered_attributes[:3])
+            return (
+                f"I found many results for '{self.context.product_query}'. "
+                f"To help narrow down the options, could you provide more specific criteria? "
+                f"For example: {attribute_examples}, or any other requirements you have."
+            )
+        else:
+            return (
+                f"I found many results for '{self.context.product_query}'. "
+                f"Could you provide more specific criteria like brand, price range, "
+                f"features, or other requirements to help narrow down the options?"
+            )
+    
+    def _parse_user_constraints(self, user_input: str) -> list:
+        """Parse user input into structured constraints"""
+        constraints = []
+        
+        # Look for price constraints
+        import re
+        price_patterns = [
+            r'under (\d+)',
+            r'below (\d+)', 
+            r'less than (\d+)',
+            r'max (\d+)',
+            r'maximum (\d+)'
+        ]
+        
+        for pattern in price_patterns:
+            match = re.search(pattern, user_input.lower())
+            if match:
+                max_price = int(match.group(1))
+                constraints.append({
+                    "type": "price",
+                    "operator": "<=",
+                    "value": max_price
+                })
+                break
+        
+        # Look for brand constraints
+        brand_keywords = ['brand', 'make', 'manufacturer']
+        for keyword in brand_keywords:
+            if keyword in user_input.lower():
+                words = user_input.split()
+                for i, word in enumerate(words):
+                    if keyword in word.lower() and i + 1 < len(words):
+                        brand = words[i + 1].strip('.,!?')
+                        constraints.append({
+                            "type": "brand",
+                            "operator": "equals",
+                            "value": brand
+                        })
+                        break
+        
+        if not constraints:
+            constraints.append({
+                "type": "general",
+                "operator": "contains",
+                "value": user_input.strip()
+            })
+        
+        return constraints
 
     def _legacy_next_fallback(self, user_input: Optional[str] = None) -> Dict[str, Any]:
         """Legacy fallback for any remaining state logic"""

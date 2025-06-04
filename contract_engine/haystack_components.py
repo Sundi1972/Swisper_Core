@@ -130,7 +130,7 @@ class AttributeAnalyzerComponent(BaseComponent):
     def __init__(self):
         super().__init__()
     
-    def run(self, products: List[Dict[str, Any]], product_query: str) -> Tuple[Dict[str, Any], str]:
+    def run(self, products: List[Dict[str, Any]], product_query: str = None) -> Tuple[Dict[str, Any], str]:
         logger.info(f"AttributeAnalyzerComponent analyzing {len(products)} products for query: {product_query}")
         try:
             from contract_engine.llm_helpers import analyze_product_differences

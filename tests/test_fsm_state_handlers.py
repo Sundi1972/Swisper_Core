@@ -30,39 +30,50 @@ class TestFSMStateHandlers:
         assert transition.requires_user_input()
         assert "What product are you looking for?" in transition.ask_user
     
-    @patch('tool_adapter.mock_google.google_shopping_search')
-    def test_handle_search_state_success(self, mock_search):
+    @patch('contract_engine.pipelines.product_search_pipeline.run_product_search')
+    def test_handle_search_state_success(self, mock_run_search):
         """Test search state handler with successful search"""
-        mock_search.return_value = [{"name": "Test Product", "price": "100 CHF"}]
+        mock_run_search.return_value = {
+            "status": "ok",
+            "items": [{"name": "Test Product", "price": "100 CHF"}],
+            "attributes": ["brand", "price"]
+        }
         
         fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
         fsm.fill_parameters({"product": "test product", "session_id": "test"})
         
-        transition = fsm.handle_search_state()
+        import asyncio
+        transition = asyncio.run(fsm.handle_search_state())
         
-        assert transition.next_state in [ContractState.EXTRACT_ENTITIES, ContractState.PRESENT_OPTIONS]
+        assert transition.next_state == ContractState.PRESENT_OPTIONS
         assert not transition.requires_user_input()
-        assert "search_product" in transition.tools_used
+        assert "product_search_pipeline" in transition.tools_used
     
-    def test_handle_search_state_no_results(self):
+    @patch('contract_engine.pipelines.product_search_pipeline.run_product_search')
+    def test_handle_search_state_no_results(self, mock_run_search):
         """Test search state handler with no search results"""
+        mock_run_search.return_value = {
+            "status": "ok",
+            "items": [],
+            "attributes": []
+        }
+        
         fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
         fsm.fill_parameters({"product": "nonexistent product", "session_id": "test"})
         
-        with patch('contract_engine.contract_engine.search_product') as mock_search:
-            mock_search.return_value = []
-            
-            transition = fsm.handle_search_state()
-            
-            assert transition.requires_user_input()
-            assert "couldn't find any products" in transition.ask_user.lower()
+        import asyncio
+        transition = asyncio.run(fsm.handle_search_state())
+        
+        assert transition.requires_user_input()
+        assert "couldn't find any products" in transition.ask_user.lower()
     
     def test_handle_search_state_no_product_query(self):
         """Test search state handler when product query is empty"""
         fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
         fsm.fill_parameters({"session_id": "test"})
         
-        transition = fsm.handle_search_state()
+        import asyncio
+        transition = asyncio.run(fsm.handle_search_state())
         
         assert transition.is_error()
         assert "No product specified" in transition.error_message
@@ -141,7 +152,7 @@ class TestFSMStateHandlers:
         fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
         
         expected_states = [
-            "start", "search", "analyze_attributes", "ask_clarification",
+            "start", "search", "refine_constraints", "ask_clarification",
             "wait_for_preferences", "filter_products", "check_compatibility",
             "rank_and_select", "confirm_selection", "confirm_order",
             "completed", "cancelled", "error"

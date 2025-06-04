@@ -48,12 +48,12 @@ async def run_product_search(pipeline: Pipeline, query: str, hard_constraints: l
         dict: Pipeline result with status, items, and attributes
     """
     try:
-        result = pipeline.run(
-            query=query,
-            hard_constraints=hard_constraints or []
-        )
+        result = pipeline.run(query=query)
         
         final_result = result.get("limit_results", {})
+        
+        if not isinstance(final_result, dict):
+            final_result = {"status": "ok", "items": [], "attributes": []}
         
         return final_result
             

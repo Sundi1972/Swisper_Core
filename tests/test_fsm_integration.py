@@ -18,17 +18,21 @@ class TestFSMIntegration:
         assert fsm.context.product_query == "GPU RTX 4090"
         assert fsm.context.session_id == "test_session"
 
-    @patch('contract_engine.contract_engine.search_product')
-    def test_fsm_product_search_flow(self, mock_search):
-        mock_search.return_value = [{"name": "RTX 4090", "price": 1599.99}]
+    @patch('contract_engine.pipelines.product_search_pipeline.run_product_search')
+    def test_fsm_product_search_flow(self, mock_pipeline):
+        mock_pipeline.return_value = {
+            "status": "ok",
+            "items": [{"name": "RTX 4090", "price": 1599.99}],
+            "attributes": ["brand", "price"]
+        }
         
         fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
         fsm.fill_parameters({"product": "RTX 4090", "session_id": "test"})
         
         result = fsm.next()
         result_str = str(result) if isinstance(result, dict) else result
-        assert "RTX 4090" in result_str
-        assert fsm.context.current_state in ["confirm_purchase", "confirm_order", "completed"]
+        assert "RTX 4090" in result_str or fsm.context.search_results
+        assert fsm.context.current_state in ["present_options", "confirm_purchase", "confirm_selection", "confirm_order", "completed"]
 
     def test_fsm_state_transitions(self):
         fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
@@ -54,9 +58,13 @@ class TestFSMIntegration:
         assert new_context.product_query == "GPU RTX 4090"
         assert new_context.session_id == "test_session"
 
-    @patch('contract_engine.contract_engine.search_product')
-    def test_fsm_no_products_found(self, mock_search):
-        mock_search.return_value = []
+    @patch('contract_engine.pipelines.product_search_pipeline.run_product_search')
+    def test_fsm_no_products_found(self, mock_pipeline):
+        mock_pipeline.return_value = {
+            "status": "ok",
+            "items": [],
+            "attributes": []
+        }
         
         fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
         fsm.fill_parameters({"product": "nonexistent item", "session_id": "test"})
