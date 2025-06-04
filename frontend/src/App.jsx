@@ -31,10 +31,17 @@ function App() {
     console.log('Section selected:', section);
   };
 
-  const handleSessionSelect = (sessionId) => {
+  const handleSessionSelect = async (sessionId) => {
     console.log('Session selected:', sessionId);
-    if (sessionId.startsWith('session_') && chatRef.current) {
-      chatRef.current.handleNewSession();
+    try {
+      setCurrentSessionId(sessionId);
+      
+      if (chatRef.current) {
+        await chatRef.current.loadSession(sessionId);
+      }
+    } catch (error) {
+      console.error('Error switching to session:', error);
+      alert('Failed to switch to selected session. Please try again.');
     }
   };
 
@@ -100,7 +107,7 @@ function App() {
           <Sidebar 
             onSectionSelect={handleSectionSelect}
             onSessionSelect={handleSessionSelect}
-            currentSessionId="default_session"
+            currentSessionId={currentSessionId}
             isCollapsed={sidebarCollapsed}
           />
         )}
