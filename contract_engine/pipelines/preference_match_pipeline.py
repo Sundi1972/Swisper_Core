@@ -10,6 +10,7 @@ This pipeline handles the stateless data transformation for preference matching:
 import logging
 from haystack.pipelines import Pipeline
 from ..haystack_components import SpecScraperComponent, CompatibilityCheckerComponent, PreferenceRankerComponent
+from ..error_handling import handle_pipeline_error, create_fallback_preference_ranking, health_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,10 @@ async def run_preference_match(pipeline: Pipeline, products: list, preferences: 
             logger.warning(f"Too many products for preference matching: {len(products)}, truncating to 50")
             products = products[:50]
         
+        if not health_monitor.is_service_available("openai_api"):
+            logger.warning("OpenAI API unavailable, using fallback preference ranking")
+            return create_fallback_preference_ranking(products, preferences)
+        
         try:
             scraper_result, _ = pipeline.get_node("scrape_specs").run(products=products, query_context=context)
             enhanced_products = scraper_result.get("enhanced_products", products)
@@ -82,6 +87,9 @@ async def run_preference_match(pipeline: Pipeline, products: list, preferences: 
             ranker_result, _ = pipeline.get_node("rank_prefs").run(products=compatible_products, preferences=preferences)
             
             result = {"rank_prefs": ranker_result}
+            
+            health_monitor.report_service_recovery("openai_api")
+            
         except Exception as pipeline_error:
             logger.warning(f"Direct component execution failed: {pipeline_error}, using fallback ranking")
             return _fallback_preference_match(products, preferences, error=str(pipeline_error))
@@ -102,7 +110,11 @@ async def run_preference_match(pipeline: Pipeline, products: list, preferences: 
             
     except Exception as e:
         logger.error(f"Preference match pipeline failed: {e}")
-        return _fallback_preference_match(products, preferences, error=str(e))
+        
+        def fallback():
+            return create_fallback_preference_ranking(products, preferences)
+        
+        return handle_pipeline_error(e, "preference_match_pipeline", fallback)
 
 def _fallback_preference_match(products: list, preferences: dict, error: str = None) -> dict:
     """

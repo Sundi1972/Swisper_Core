@@ -10,6 +10,7 @@ This pipeline handles the stateless data transformation for product search:
 import logging
 from haystack.pipelines import Pipeline
 from ..haystack_components import MockGoogleShoppingComponent, AttributeAnalyzerComponent, ResultLimiterComponent
+from ..error_handling import handle_pipeline_error, create_fallback_product_search, health_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,10 @@ async def run_product_search(pipeline: Pipeline, query: str, hard_constraints: l
         dict: Pipeline result with status, items, and attributes
     """
     try:
+        if not health_monitor.is_service_available("product_search"):
+            logger.warning("Product search service unavailable, using fallback")
+            return create_fallback_product_search(query, max_results=50)
+        
         result = pipeline.run(query=query)
         
         final_result = result.get("limit_results", {})
@@ -55,13 +60,14 @@ async def run_product_search(pipeline: Pipeline, query: str, hard_constraints: l
         if not isinstance(final_result, dict):
             final_result = {"status": "ok", "items": [], "attributes": []}
         
+        health_monitor.report_service_recovery("product_search")
+        
         return final_result
             
     except Exception as e:
         logger.error(f"Product search pipeline failed: {e}")
-        return {
-            "status": "error",
-            "items": [],
-            "attributes": [],
-            "error": str(e)
-        }
+        
+        def fallback():
+            return create_fallback_product_search(query, max_results=50)
+        
+        return handle_pipeline_error(e, "product_search_pipeline", fallback)

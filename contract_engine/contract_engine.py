@@ -15,6 +15,10 @@ from .state_transitions import (
     create_user_input_transition, create_completion_transition
 )
 from .pipelines.preference_match_pipeline import create_preference_match_pipeline, run_preference_match
+from .error_handling import (
+    health_monitor, get_degraded_operation_message, 
+    create_user_friendly_error_message, OperationMode
+)
 
 # LLM Helper functions are no longer used by the slimmed FSM
 # from engine.llm_helpers import (
@@ -126,10 +130,25 @@ class ContractStateMachine:
                 transition = asyncio.run(handler(user_input))
             else:
                 transition = handler(user_input)
-            return self._process_state_transition(transition)
+            result = self._process_state_transition(transition)
+            
+            operation_mode = health_monitor.get_operation_mode()
+            if operation_mode != OperationMode.FULL:
+                mode_message = get_degraded_operation_message(operation_mode)
+                if mode_message and "ask_user" in result:
+                    result["ask_user"] = f"{result['ask_user']}\n\n{mode_message}"
+            
+            return result
         except Exception as e:
             self.logger.error(f"FSM (session: {session_id}): Error in state handler: {e}")
-            return {"status": "failed", "message": f"Error processing state {self.context.current_state}"}
+            
+            user_message = create_user_friendly_error_message(e, "Please try again or let me know if you'd like to start over.")
+            
+            return {
+                "status": "failed", 
+                "message": f"Error processing state {self.context.current_state}",
+                "ask_user": user_message
+            }
 
     def _get_session_id(self) -> str:
         """Get session ID from contract parameters"""
