@@ -78,10 +78,27 @@ class SwisperContext(BaseModel):
         return self.last_pipeline_results.get(pipeline_name)
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to JSON-serializable dictionary"""
-        return self.dict()
+        """Convert context to dictionary with state validation"""
+        context_dict = self.dict()
+        context_dict["serialization_version"] = "1.0"
+        
+        if not context_dict.get("current_state"):
+            raise ValueError(f"Invalid state in context serialization: {context_dict.get('current_state')}")
+        
+        return context_dict
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'SwisperContext':
-        """Create from dictionary with validation"""
-        return cls(**data)
+        """Create context from dictionary with integrity validation"""
+        required_fields = ["session_id", "current_state"]
+        for field in required_fields:
+            if field not in data or data[field] is None:
+                raise ValueError(f"Missing required field in context data: {field}")
+        
+        valid_states = ["start", "search", "refine_constraints", "collect_preferences", 
+                       "match_preferences", "confirm_purchase", "completed", "cancelled", "failed"]
+        if data["current_state"] not in valid_states:
+            raise ValueError(f"Invalid state in context data: {data['current_state']}")
+        
+        clean_data = {k: v for k, v in data.items() if k != "serialization_version"}
+        return cls(**clean_data)
