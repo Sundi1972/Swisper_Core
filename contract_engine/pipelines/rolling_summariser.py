@@ -34,7 +34,7 @@ def create_rolling_summariser_pipeline() -> Pipeline:
     return pipeline
 
 def summarize_messages(messages: List[Dict[str, Any]]) -> str:
-    """Summarize list of messages using T5-based pipeline"""
+    """Summarize list of messages using T5-based pipeline with PII protection"""
     try:
         if not messages:
             return ""
@@ -46,8 +46,13 @@ def summarize_messages(messages: List[Dict[str, Any]]) -> str:
         
         combined_content = " ".join(content_parts)
         
+        from contract_engine.privacy.pii_redactor import pii_redactor
+        redacted_content = pii_redactor.redact(combined_content, redaction_method="placeholder")
+        
+        logger.info(f"Applied PII redaction before T5 summarization")
+        
         pipeline = create_rolling_summariser_pipeline()
-        result = pipeline.run(query=combined_content)
+        result = pipeline.run(query=redacted_content)
         
         if "Summarizer" in result and result["Summarizer"]:
             summary_output = result["Summarizer"][0]
@@ -56,7 +61,7 @@ def summarize_messages(messages: List[Dict[str, Any]]) -> str:
             elif isinstance(summary_output, str):
                 return summary_output
         
-        return combined_content[:200] + "..." if len(combined_content) > 200 else combined_content
+        return redacted_content[:200] + "..." if len(redacted_content) > 200 else redacted_content
         
     except Exception as e:
         logger.error(f"T5 summarization failed: {e}")

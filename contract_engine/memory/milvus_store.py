@@ -76,12 +76,31 @@ class MilvusSemanticStore:
             raise
     
     def add_memory(self, user_id: str, content: str, memory_type: str = "preference", metadata: Dict[str, Any] = None) -> bool:
-        """Add semantic memory to Milvus store"""
+        """Add semantic memory to Milvus store with PII protection"""
         try:
             if not self.collection or not self.embedding_model:
                 return False
             
-            embedding = self.embedding_model.encode([content])[0].tolist()
+            from contract_engine.privacy.pii_redactor import pii_redactor
+            
+            if not pii_redactor.is_text_safe_for_storage(content):
+                logger.warning(f"Content contains PII, applying redaction for user {user_id}")
+                content = pii_redactor.redact(content, redaction_method="hash")
+                
+                if metadata is None:
+                    metadata = {}
+                metadata["pii_detected"] = True
+                metadata["pii_redacted"] = True
+            
+            embedding_result = self.embedding_model.encode([content])
+            if hasattr(embedding_result, 'tolist'):
+                embedding = embedding_result.tolist()
+                if isinstance(embedding, list) and len(embedding) > 0:
+                    embedding = embedding[0]
+            else:
+                embedding = embedding_result[0]
+                if hasattr(embedding, 'tolist'):
+                    embedding = embedding.tolist()
             
             data = [{
                 "user_id": user_id,
@@ -89,6 +108,8 @@ class MilvusSemanticStore:
                 "embedding": embedding,
                 "metadata": json.dumps({
                     "type": memory_type,
+                    "privacy_processed": True,
+                    "created_at": int(time.time() * 1000),
                     **(metadata or {})
                 }),
                 "timestamp": int(time.time() * 1000)
@@ -97,7 +118,7 @@ class MilvusSemanticStore:
             self.collection.insert(data)
             self.collection.flush()
             
-            logger.info(f"Added semantic memory for user {user_id}: {content[:50]}...")
+            logger.info(f"Added privacy-protected semantic memory for user {user_id}: {content[:50]}...")
             return True
             
         except Exception as e:
@@ -148,21 +169,56 @@ class MilvusSemanticStore:
         """Get memory statistics for user"""
         try:
             if not self.collection:
-                return {}
+                return {"total_memories": 0, "error": "Collection not available"}
             
-            result = self.collection.query(
-                expr=f'user_id == "{user_id}"',
-                output_fields=["id"],
-                limit=10000
+            expr = f'user_id == "{user_id}"'
+            results = self.collection.query(
+                expr=expr,
+                output_fields=["metadata", "timestamp"],
+                limit=1000
             )
             
+            total_memories = len(results)
+            memory_types = {}
+            pii_protected_count = 0
+            
+            for result in results:
+                try:
+                    metadata = json.loads(result.get("metadata", "{}"))
+                    memory_type = metadata.get("type", "unknown")
+                    memory_types[memory_type] = memory_types.get(memory_type, 0) + 1
+                    
+                    if metadata.get("pii_detected", False):
+                        pii_protected_count += 1
+                except:
+                    pass
+            
             return {
-                "total_memories": len(result),
+                "total_memories": total_memories,
+                "memory_types": memory_types,
+                "pii_protected_memories": pii_protected_count,
                 "user_id": user_id
             }
             
         except Exception as e:
-            logger.error(f"Failed to get memory stats: {e}")
-            return {}
+            logger.error(f"Failed to get user memory stats: {e}")
+            return {"total_memories": 0, "error": str(e)}
+    
+    def delete_user_memories(self, user_id: str) -> bool:
+        """Delete all memories for a user (GDPR compliance)"""
+        try:
+            if not self.collection:
+                return False
+            
+            expr = f'user_id == "{user_id}"'
+            self.collection.delete(expr)
+            self.collection.flush()
+            
+            logger.info(f"Deleted all memories for user {user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to delete user memories: {e}")
+            return False
 
 milvus_semantic_store = MilvusSemanticStore()
