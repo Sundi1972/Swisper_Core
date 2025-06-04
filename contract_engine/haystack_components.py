@@ -134,9 +134,12 @@ class AttributeAnalyzerComponent(BaseComponent):
         logger.info(f"AttributeAnalyzerComponent analyzing {len(products)} products for query: {product_query}")
         try:
             from contract_engine.llm_helpers import analyze_product_differences
-            analysis = analyze_product_differences(products)
-            
-            attributes = self._extract_attributes_from_analysis(analysis, product_query)
+            try:
+                analysis = analyze_product_differences(products)
+                attributes = self._extract_attributes_from_analysis(analysis, product_query)
+            except Exception as e:
+                logger.warning(f"LLM attribute analysis failed, using fallback: {e}")
+                attributes = ["price", "brand", "capacity", "energy_efficiency", "size", "features"]
             
             output = {
                 "products": products,
@@ -267,3 +270,83 @@ class CompatibilityCheckerComponent(BaseComponent):
         except Exception as e:
             logger.error(f"Web search enhancement failed: {e}")
             return products
+
+
+class ResultLimiterComponent(BaseComponent):
+    """
+    Component that limits search results and determines if refinement is needed.
+    
+    Returns structured response indicating whether results need refinement
+    or can proceed to next stage.
+    """
+    
+    outgoing_edges = 1
+
+    def __init__(self, max_results: int = 50):
+        """
+        Initialize the result limiter component.
+        
+        Args:
+            max_results: Maximum number of results before requiring refinement
+        """
+        super().__init__()
+        self.max_results = max_results
+
+    def run(self, products: List[Dict[str, Any]], attributes: List[str] = None) -> Tuple[Dict[str, Any], str]:
+        """
+        Limit results and determine if refinement is needed.
+        
+        Args:
+            products: List of product dictionaries
+            attributes: List of discovered attributes
+            
+        Returns:
+            Tuple of (result_dict, output_edge)
+        """
+        logger.info(f"ResultLimiterComponent processing {len(products)} products")
+        
+        try:
+            if len(products) > self.max_results:
+                logger.info(f"Too many results ({len(products)} > {self.max_results}), refinement needed")
+                return {
+                    "status": "too_many",
+                    "items": [],
+                    "attributes": attributes or [],
+                    "total_found": len(products),
+                    "max_allowed": self.max_results
+                }, "output_1"
+            else:
+                logger.info(f"Results within limit ({len(products)} <= {self.max_results}), proceeding")
+                return {
+                    "status": "ok",
+                    "items": products,
+                    "attributes": attributes or [],
+                    "total_found": len(products)
+                }, "output_1"
+                
+        except Exception as e:
+            logger.error(f"ResultLimiterComponent error: {e}")
+            return {
+                "status": "error",
+                "items": [],
+                "attributes": [],
+                "error": str(e)
+            }, "output_1"
+
+    def run_batch(self, products_batch: List[List[Dict[str, Any]]], attributes_batch: List[List[str]] = None) -> List[Tuple[Dict[str, Any], str]]:
+        """
+        Process multiple product lists in batch.
+        
+        Args:
+            products_batch: List of product lists
+            attributes_batch: List of attribute lists
+            
+        Returns:
+            List of result tuples
+        """
+        results = []
+        for i, products_list in enumerate(products_batch):
+            attributes = attributes_batch[i] if attributes_batch and i < len(attributes_batch) else None
+            result, edge = self.run(products_list, attributes)
+            results.append((result, edge))
+        return results
