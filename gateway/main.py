@@ -40,14 +40,7 @@ from .log_handler import log_buffer, WebSocketLogHandler
 app = FastAPI()
 
 # CORS configuration
-# origins = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    # Add other origins as needed, e.g., from environment variables
-]
+origins = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,
