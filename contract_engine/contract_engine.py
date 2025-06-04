@@ -131,7 +131,7 @@ class ContractStateMachine:
         try:
             import asyncio
             if asyncio.iscoroutinefunction(handler):
-                transition = asyncio.run(handler(user_input))
+                raise RuntimeError("Async state handlers require async orchestrator context")
             else:
                 transition = handler(user_input)
             result = self._process_state_transition(transition)
@@ -213,7 +213,7 @@ class ContractStateMachine:
         self.logger.info(f"FSM (session: {session_id}): Transition: start → search")
         return create_success_transition(next_state=ContractState.SEARCH)
     
-    async def handle_search_state(self, user_input: Optional[str] = None) -> StateTransition:
+    def handle_search_state(self, user_input: Optional[str] = None) -> StateTransition:
         """Handle the search state - perform product search using pipeline"""
         session_id = self._get_session_id()
         
@@ -228,11 +228,18 @@ class ContractStateMachine:
             start_time = time.time()
             
             from .pipelines.product_search_pipeline import run_product_search
-            pipeline_result = await run_product_search(
-                pipeline=self.product_search_pipeline,
-                query=self.context.product_query,
-                hard_constraints=getattr(self.context, 'constraints', [])
-            )
+            import asyncio
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                pipeline_result = loop.run_until_complete(run_product_search(
+                    pipeline=self.product_search_pipeline,
+                    query=self.context.product_query,
+                    hard_constraints=getattr(self.context, 'constraints', [])
+                ))
+            finally:
+                loop.close()
             
             execution_time = time.time() - start_time
             
