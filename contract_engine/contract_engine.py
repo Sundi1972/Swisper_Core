@@ -695,7 +695,7 @@ class ContractStateMachine:
             self.logger.info(f"FSM (session: {session_id}): User selected {product_name}. Transition: confirm_selection → confirm_order")
             
             return StateTransition(
-                next_state=ContractState.CONFIRM_PURCHASE,
+                next_state=ContractState.COMPLETE_ORDER,
                 ask_user=f"You selected: {product_name}{price_info}. Shall I go ahead and confirm this order?",
                 status="waiting_for_input",
                 context_updates=context_updates,
