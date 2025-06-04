@@ -119,6 +119,7 @@ class ContractStateMachine:
             "confirm_selection": self.handle_confirm_selection_state,
             "confirm_purchase": self.handle_confirm_selection_state,  # Map confirm_purchase to confirm_selection
             "confirm_order": self.handle_confirm_order_state,
+            "complete_order": self.handle_confirm_order_state,  # Map complete_order to confirm_order
             "completed": self.handle_completed_state,
             "cancelled": self.handle_cancelled_state,
             "error": self.handle_error_state
