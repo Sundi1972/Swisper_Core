@@ -529,3 +529,73 @@ def generate_product_recommendation(products: list, user_preferences: list, user
                 "reasoning": "Based on highest rating and best price-to-value ratio"
             }
         }
+
+def generate_preference_refinement_message(products: list, attributes: list, product_query: str) -> str:
+    """
+    Generate LLM-powered preference refinement message with product table and attribute ranges.
+    
+    Args:
+        products: List of search result products
+        attributes: List of key attributes discovered for this product category
+        product_query: The original search query
+        
+    Returns:
+        String message with formatted product table and attribute ranges
+    """
+    if not products or len(products) == 0:
+        return f"I found many results for '{product_query}'. Could you provide more specific criteria like brand, price range, features, or other requirements to help narrow down the options?"
+    
+    display_products = products[:10]
+    
+    prompt = f"""
+You are a helpful shopping assistant. The user searched for "{product_query}" and we found {len(products)} results, which is too many to review easily.
+
+Create a user-friendly message that:
+1. Explains we found many results and need to narrow them down
+2. Shows a nicely formatted table of the first 10 products with key information (name, price, key specs)
+3. Lists the key attributes for this product category with their value ranges found in the search results
+4. Asks the user to provide more specific preferences
+
+Here are the products to display:
+{json.dumps(display_products, indent=2)}
+
+Here are the key attributes we identified:
+{json.dumps(attributes, indent=2)}
+
+Format your response as a clear, helpful message. Use markdown table format for the products. After the table, show the attribute ranges in a user-friendly way.
+
+Example format:
+"I found {len(products)} results for '{product_query}'. Here are some of the options:
+
+| Product | Price | Key Features |
+|---------|-------|--------------|
+| ... | ... | ... |
+
+To help narrow down your choices, here are the key attributes and their ranges in these results:
+- Price: CHF X - CHF Y
+- Brand: A, B, C, etc.
+- [other attributes with ranges]
+
+Could you please tell me your preferences for any of these attributes?"
+
+Return only the formatted message text. Do not include markdown code blocks or explanations.
+"""
+    
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            timeout=30
+        )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception as e:
+        print(f"❌ Failed to generate preference refinement message: {e}")
+        attribute_examples = ", ".join(attributes[:3]) if attributes else "brand, price range, features"
+        return (
+            f"I found {len(products)} results for '{product_query}'. "
+            f"To help narrow down the options, could you provide more specific criteria? "
+            f"For example: {attribute_examples}, or any other requirements you have."
+        )

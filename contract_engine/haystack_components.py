@@ -369,7 +369,7 @@ class ResultLimiterComponent(BaseComponent):
     
     outgoing_edges = 1
 
-    def __init__(self, max_results: int = 50):
+    def __init__(self, max_results: int = 20):
         """
         Initialize the result limiter component.
         

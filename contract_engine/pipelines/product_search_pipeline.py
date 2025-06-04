@@ -29,8 +29,8 @@ def create_product_search_pipeline() -> Pipeline:
     analyzer_component = AttributeAnalyzerComponent()
     pipeline.add_node(component=analyzer_component, name="analyze_attributes", inputs=["search"])
     
-    # Node 3: Result Limiter (if ≤50 pass, else return too_many_results)
-    limiter_component = ResultLimiterComponent(max_results=50)
+    # Node 3: Result Limiter (if ≤20 pass, else return too_many_results)
+    limiter_component = ResultLimiterComponent(max_results=20)
     pipeline.add_node(component=limiter_component, name="limit_results", inputs=["analyze_attributes"])
     
     logger.info("Product search pipeline created successfully")
@@ -51,7 +51,7 @@ async def run_product_search(pipeline: Pipeline, query: str, hard_constraints: l
     try:
         if not health_monitor.is_service_available("product_search"):
             logger.warning("Product search service unavailable, using fallback")
-            return create_fallback_product_search(query, max_results=50)
+            return create_fallback_product_search(query, max_results=20)
         
         result = pipeline.run(query=query)
         
@@ -68,6 +68,6 @@ async def run_product_search(pipeline: Pipeline, query: str, hard_constraints: l
         logger.error(f"Product search pipeline failed: {e}")
         
         def fallback():
-            return create_fallback_product_search(query, max_results=50)
+            return create_fallback_product_search(query, max_results=20)
         
         return handle_pipeline_error(e, "product_search_pipeline", fallback)

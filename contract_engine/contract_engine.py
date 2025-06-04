@@ -388,7 +388,17 @@ class ContractStateMachine:
         self.logger.info(f"🎯 FSM (session: {session_id}): Processing user preferences: '{user_input}'")
         
         if not user_input:
-            return create_user_input_transition("Could you please tell me your preferences? For example, your budget, preferred brand, or specific features you need.")
+            from contract_engine.llm_helpers import generate_preference_refinement_message
+            search_results = getattr(self.context, 'search_results', [])
+            extracted_attributes = getattr(self.context, 'extracted_attributes', [])
+            product_query = getattr(self.context, 'product_query', 'your search')
+            
+            preference_message = generate_preference_refinement_message(
+                products=search_results,
+                attributes=extracted_attributes, 
+                product_query=product_query
+            )
+            return create_user_input_transition(preference_message)
         
         try:
             from contract_engine.llm_helpers import analyze_user_preferences
