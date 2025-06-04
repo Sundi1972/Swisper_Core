@@ -34,8 +34,26 @@ function App() {
     }
   };
 
-  const handleSearchResultSelect = (sessionId, messageIndex) => {
+  const handleSearchResultSelect = async (sessionId, messageIndex) => {
     console.log('Search result selected:', sessionId, messageIndex);
+    
+    try {
+      setCurrentSessionId(sessionId);
+      
+      if (chatRef.current) {
+        await chatRef.current.loadSession(sessionId);
+        
+        setTimeout(() => {
+          if (chatRef.current && chatRef.current.scrollToMessage) {
+            chatRef.current.scrollToMessage(messageIndex);
+          }
+        }, 500);
+      }
+      
+    } catch (error) {
+      console.error('Error switching to session:', error);
+      alert('Failed to switch to selected session. Please try again.');
+    }
   };
 
   const handleToggleFullWidth = () => {

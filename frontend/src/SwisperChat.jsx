@@ -127,8 +127,54 @@ const SwisperChat = forwardRef((props, ref) => {
     console.log('Add file triggered');
   };
 
+  const loadSession = async (targetSessionId) => {
+    try {
+      localStorage.setItem("swisper_session_id", targetSessionId);
+      setSessionId(targetSessionId);
+      
+      const savedMessages = localStorage.getItem(`chat_history_${targetSessionId}`);
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        setMessages(parsedMessages);
+      } else {
+        try {
+          const response = await fetch(`http://localhost:8000/api/sessions/${targetSessionId}/messages`);
+          if (response.ok) {
+            const data = await response.json();
+            setMessages(data.messages || [{ role: "assistant", content: "Hi, how can I help you today?" }]);
+          } else {
+            setMessages([{ role: "assistant", content: "Hi, how can I help you today?" }]);
+          }
+        } catch (error) {
+          console.error('Error fetching session messages:', error);
+          setMessages([{ role: "assistant", content: "Hi, how can I help you today?" }]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading session:', error);
+    }
+  };
+
+  const scrollToMessage = (messageIndex) => {
+    setTimeout(() => {
+      const messageElements = document.querySelectorAll('[data-message-index]');
+      if (messageElements[messageIndex]) {
+        messageElements[messageIndex].scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        messageElements[messageIndex].classList.add('ring-2', 'ring-orange-400');
+        setTimeout(() => {
+          messageElements[messageIndex].classList.remove('ring-2', 'ring-orange-400');
+        }, 3000);
+      }
+    }, 100);
+  };
+
   useImperativeHandle(ref, () => ({
     handleNewSession,
+    loadSession,
+    scrollToMessage,
     getSessionId: () => sessionId
   }));
 
@@ -146,7 +192,10 @@ const SwisperChat = forwardRef((props, ref) => {
 
       <div className="flex-1 overflow-y-auto space-y-6 mb-20 min-h-0">
         {messages.map((msg, i) => (
-          <div key={i} className={`w-3/4 ${msg.role === 'user' ? 'ml-auto' : 'ml-0'}`}>
+          <div 
+            key={i} 
+            data-message-index={i}
+            className={`w-3/4 ${msg.role === 'user' ? 'ml-auto' : 'ml-0'}`}>
             <div className={`${
               msg.role === 'user' 
                 ? 'bg-[#141923] rounded-lg p-4' 
