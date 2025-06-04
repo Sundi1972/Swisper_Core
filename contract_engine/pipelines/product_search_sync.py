@@ -26,29 +26,20 @@ def run_product_search_sync(
     try:
         logger.info(f"Running sync product search for query: {query}")
         
-        mock_results = [
-            {
-                "name": f"High-end {query}",
-                "price": "1299 CHF",
-                "rating": 4.8,
-                "brand": "NVIDIA",
-                "specs": {"memory": "16GB", "cores": "10752"}
-            },
-            {
-                "name": f"Mid-range {query}",
-                "price": "799 CHF", 
-                "rating": 4.5,
-                "brand": "AMD",
-                "specs": {"memory": "12GB", "cores": "7680"}
-            },
-            {
-                "name": f"Budget {query}",
-                "price": "399 CHF",
-                "rating": 4.2,
-                "brand": "NVIDIA",
-                "specs": {"memory": "8GB", "cores": "5888"}
-            }
-        ]
+        mock_results = []
+        brands = ["Samsung", "LG", "Bosch", "Siemens", "Miele", "Whirlpool", "Electrolux", "AEG", "NVIDIA", "AMD"]
+        
+        for i in range(25):
+            price = 299 + (i * 50) + (i % 7 * 25)
+            brand = brands[i % len(brands)]
+            
+            mock_results.append({
+                "name": f"{brand} {query} Model {i+1}",
+                "price": f"{price} CHF",
+                "rating": round(3.5 + (i % 3) * 0.5, 1),
+                "brand": brand,
+                "specs": {"memory": f"{8 + (i % 3) * 4}GB", "cores": f"{5000 + i * 200}"}
+            })
         
         filtered_results = mock_results
         if hard_constraints:
@@ -64,7 +55,7 @@ def run_product_search_sync(
                     except (ValueError, IndexError):
                         logger.warning(f"Could not parse price constraint: {constraint}")
         
-        if len(filtered_results) > 50:
+        if len(filtered_results) > 20:
             status = "too_many_results"
         elif len(filtered_results) == 0:
             status = "no_results"

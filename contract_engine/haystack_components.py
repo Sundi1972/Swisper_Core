@@ -396,7 +396,7 @@ class ResultLimiterComponent(BaseComponent):
             if len(products) > self.max_results:
                 logger.info(f"Too many results ({len(products)} > {self.max_results}), refinement needed")
                 return {
-                    "status": "too_many",
+                    "status": "too_many_results",
                     "items": [],
                     "attributes": attributes or [],
                     "total_found": len(products),

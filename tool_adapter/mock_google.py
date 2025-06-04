@@ -83,8 +83,8 @@ def mock_google_shopping(q: str) -> List[Dict[str, Any]]:
         ]
         
         if not filtered_products and q: # If query doesn't match anything and query was not empty
-            logger.warning("No direct match for query '%s' in mock data. Returning first 2 items as fallback.", q)
-            return all_products[:2] 
+            logger.warning("No direct match for query '%s' in mock data. Generating synthetic products for testing.", q)
+            return _generate_synthetic_products(q, 25)
         elif not q: # If query is empty, return all products or a subset
              logger.warning("Empty query received. Returning all mock products.")
              return all_products
@@ -142,3 +142,26 @@ def route(name: str, params: dict):
     else:
         logger.error("Unknown tool name in mock_adapter.route: %s", name)
         raise ValueError(f"Unknown tool: {name}")
+
+def _generate_synthetic_products(query: str, count: int = 25) -> List[Dict[str, Any]]:
+    """Generate synthetic products for testing when no mock data matches"""
+    products = []
+    brands = ["Samsung", "LG", "Bosch", "Siemens", "Miele", "Whirlpool", "Electrolux", "AEG"]
+    
+    for i in range(count):
+        price = 299 + (i * 50) + (i % 7 * 25)  # Varied pricing
+        brand = brands[i % len(brands)]
+        
+        product = {
+            "name": f"{brand} {query.title()} Model {i+1}",
+            "brand": brand,
+            "price": f"{price} CHF",
+            "rating": round(3.5 + (i % 3) * 0.5, 1),
+            "reviews": 50 + (i * 10),
+            "link": f"https://example.com/product-{i+1}",
+            "thumbnail": f"https://example.com/thumb-{i+1}.jpg",
+            "source": "synthetic_test_data"
+        }
+        products.append(product)
+    
+    return products

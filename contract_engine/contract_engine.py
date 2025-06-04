@@ -238,6 +238,10 @@ class ContractStateMachine:
         """Handle the search state - perform product search using pipeline"""
         session_id = self._get_session_id()
         
+        if user_input and user_input.strip():
+            self.context.product_query = user_input.strip()
+            self.logger.info(f"FSM (session: {session_id}): Updated product query to '{self.context.product_query}'")
+        
         if not self.context.product_query:
             self.logger.error(f"FSM (session: {session_id}): Product query is empty in 'search' state.")
             return create_error_transition("No product specified for search.")
