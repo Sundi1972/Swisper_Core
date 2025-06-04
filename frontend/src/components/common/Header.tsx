@@ -60,6 +60,7 @@ const Header: React.FC<HeaderProps> = ({
     } catch (error) {
       console.error('Error searching:', error);
       setSearchResults([]);
+      setShowResults(false);
     } finally {
       setSearching(false);
     }
