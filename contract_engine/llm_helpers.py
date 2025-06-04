@@ -15,11 +15,19 @@ project_id = os.getenv("OPENAI_PROJECT_ID")
 print("🔑 Detected API Key:", "SET" if api_key else "NOT SET")
 print("🧭 Project ID:", project_id if project_id else "NOT SET")
 
-# Initialize OpenAI client
-client = OpenAI(
-    api_key=api_key,
-    project=project_id
-)
+# Initialize OpenAI client lazily
+_client = None
+
+def get_openai_client():
+    global _client
+    if _client is None:
+        if not api_key:
+            raise ValueError("OpenAI API key not available")
+        _client = OpenAI(
+            api_key=api_key,
+            project=project_id
+        )
+    return _client
 
 def extract_initial_criteria(user_prompt: str) -> dict:
     """Extract product criteria and specifications from initial user prompt"""
@@ -49,6 +57,7 @@ def extract_initial_criteria(user_prompt: str) -> dict:
     )
 
     try:
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
@@ -160,6 +169,7 @@ def is_response_relevant(user_response: str, expected_context: str, product_cont
     )
 
     try:
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
@@ -230,6 +240,7 @@ def analyze_product_differences(product_list: list) -> list:
     )
 
     try:
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
@@ -294,6 +305,7 @@ def analyze_user_preferences(user_input: str, product_search_results: list) -> d
 
     try:
         logger.info("🤖 Sending request to OpenAI GPT-4o...")
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
@@ -351,10 +363,12 @@ def check_product_compatibility(product_list: list, user_constraints: dict, prod
         "1. Analyze which product attributes matter for compatibility.\n"
         "2. Search the web and see whether you find additional attributes for the products that would determine compatiblity.For example a graphics card would have a pCI slot and a length"
         "3. For each product, return whether it is 'compatible': true or false.\n\n"
-        "Return a JSON list where each item includes the product name and compatibility flag."
-        "Return only valid JSON. Do not include markdown or explanations. Do not wrap the JSON in triple backticks."    )
+        "Return a JSON list where each item includes the product name and compatibility flag. "
+        "Return only valid JSON. Do not include markdown or explanations. Do not wrap the JSON in triple backticks."
+    )
 
     try:
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
@@ -394,6 +408,7 @@ def filter_products_with_llm(product_list: list, preferences: dict, constraints:
     )
 
     try:
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
@@ -475,6 +490,7 @@ def generate_product_recommendation(products: list, user_preferences: list, user
     """
 
     try:
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
