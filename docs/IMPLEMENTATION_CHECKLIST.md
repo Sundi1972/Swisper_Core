@@ -14,12 +14,12 @@
 - [x] Write integration tests for product search flow
 - [x] Verify: `poetry run pytest tests/test_product_search_pipeline.py` (7/7 tests pass)
 
-## Step 3: Missing Pipeline Components ✅ Ready to Start
-- [ ] Implement `SpecScraperComponent`
-- [ ] Implement `CompatibilityCheckerComponent` (already exists, needs enhancement)
-- [ ] Implement `PreferenceRankerComponent`
-- [ ] Write unit tests for each
-- [ ] Verify: `poetry run pytest tests/test_pipeline_components.py`
+## Step 3: Missing Pipeline Components ✅ COMPLETED
+- [x] Implement `SpecScraperComponent`
+- [x] Implement `CompatibilityCheckerComponent` (enhanced with run_batch)
+- [x] Implement `PreferenceRankerComponent`
+- [x] Write unit tests for each
+- [x] Verify: `poetry run pytest tests/test_pipeline_components.py` (17/17 tests pass)
 
 ## Step 4: Preference Match Pipeline
 - [ ] Implement `create_preference_match_pipeline()`

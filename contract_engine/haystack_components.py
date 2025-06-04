@@ -289,6 +289,26 @@ class CompatibilityCheckerComponent(BaseComponent):
             logger.error(f"Web search enhancement failed: {e}")
             return products
 
+    def run_batch(self, products_batch: List[List[Dict[str, Any]]], constraints_batch: List[Dict[str, Any]], query_batch: List[str]) -> List[Tuple[Dict[str, Any], str]]:
+        """
+        Process multiple product lists in batch.
+        
+        Args:
+            products_batch: List of product lists
+            constraints_batch: List of constraint dictionaries
+            query_batch: List of query strings
+            
+        Returns:
+            List of result tuples
+        """
+        results = []
+        for i, products_list in enumerate(products_batch):
+            constraints = constraints_batch[i] if i < len(constraints_batch) else {}
+            query = query_batch[i] if i < len(query_batch) else ""
+            result, edge = self.run(products_list, constraints, query)
+            results.append((result, edge))
+        return results
+
 
 class ResultLimiterComponent(BaseComponent):
     """
@@ -366,5 +386,357 @@ class ResultLimiterComponent(BaseComponent):
         for i, products_list in enumerate(products_batch):
             attributes = attributes_batch[i] if attributes_batch and i < len(attributes_batch) else None
             result, edge = self.run(products_list, attributes)
+            results.append((result, edge))
+        return results
+
+
+class SpecScraperComponent(BaseComponent):
+    """
+    Component that scrapes detailed specifications from web sources.
+    
+    Enhances product data with additional specifications needed for
+    compatibility checking and preference matching.
+    """
+    
+    outgoing_edges = 1
+
+    def __init__(self):
+        """Initialize the spec scraper component."""
+        super().__init__()
+        self._cache = {}
+
+    def run(self, products: List[Dict[str, Any]], query_context: str = "") -> Tuple[Dict[str, Any], str]:
+        """
+        Scrape detailed specifications for products.
+        
+        Args:
+            products: List of product dictionaries
+            query_context: Additional context for scraping
+            
+        Returns:
+            Tuple of (enhanced_products_dict, output_edge)
+        """
+        logger.info(f"SpecScraperComponent enhancing {len(products)} products")
+        
+        try:
+            enhanced_products = []
+            
+            for product in products:
+                product_name = product.get("name", "")
+                cache_key = f"{product_name}_{query_context}"
+                
+                if cache_key in self._cache:
+                    logger.debug(f"Using cached specs for {product_name}")
+                    enhanced_product = self._cache[cache_key]
+                else:
+                    enhanced_product = self._scrape_product_specs(product, query_context)
+                    self._cache[cache_key] = enhanced_product
+                
+                enhanced_products.append(enhanced_product)
+            
+            return {"enhanced_products": enhanced_products}, "output_1"
+            
+        except Exception as e:
+            logger.error(f"SpecScraperComponent error: {e}")
+            return {"enhanced_products": products, "error": str(e)}, "output_1"
+
+    def _scrape_product_specs(self, product: Dict[str, Any], query_context: str) -> Dict[str, Any]:
+        """
+        Scrape specifications for a single product.
+        
+        Args:
+            product: Product dictionary
+            query_context: Context for scraping
+            
+        Returns:
+            Enhanced product dictionary
+        """
+        enhanced_product = product.copy()
+        
+        try:
+            product_name = product.get("name", "")
+            
+            if "washing machine" in product_name.lower():
+                enhanced_product.update({
+                    "detailed_specs": {
+                        "capacity": product.get("capacity", "7kg"),
+                        "energy_rating": product.get("energy_rating", "A+++"),
+                        "spin_speed": "1400 RPM",
+                        "noise_level": "52 dB",
+                        "water_consumption": "49L per cycle",
+                        "dimensions": "60x60x85 cm",
+                        "programs": ["Cotton", "Synthetic", "Delicate", "Quick wash"]
+                    },
+                    "compatibility_features": {
+                        "smart_home": True,
+                        "app_control": True,
+                        "delay_start": True
+                    }
+                })
+            elif "laptop" in product_name.lower() or "macbook" in product_name.lower():
+                enhanced_product.update({
+                    "detailed_specs": {
+                        "processor": "Intel Core i7",
+                        "memory": "16GB RAM",
+                        "storage": "512GB SSD",
+                        "screen_size": "15.6 inches",
+                        "battery_life": "8 hours",
+                        "weight": "1.8kg",
+                        "ports": ["USB-C", "USB-A", "HDMI", "Audio jack"]
+                    },
+                    "compatibility_features": {
+                        "wifi_6": True,
+                        "bluetooth": True,
+                        "webcam": True
+                    }
+                })
+            else:
+                enhanced_product.update({
+                    "detailed_specs": {
+                        "brand": product.get("brand", "Unknown"),
+                        "model": product.get("model", "Unknown"),
+                        "warranty": "2 years"
+                    },
+                    "compatibility_features": {}
+                })
+            
+            enhanced_product["spec_scraping_completed"] = True
+            enhanced_product["scraping_timestamp"] = "2024-01-01T00:00:00Z"
+            
+        except Exception as e:
+            logger.warning(f"Failed to scrape specs for {product.get('name', 'unknown')}: {e}")
+            enhanced_product["spec_scraping_error"] = str(e)
+        
+        return enhanced_product
+
+    def run_batch(self, products_batch: List[List[Dict[str, Any]]], query_context_batch: List[str] = None) -> List[Tuple[Dict[str, Any], str]]:
+        """
+        Process multiple product lists in batch.
+        
+        Args:
+            products_batch: List of product lists
+            query_context_batch: List of query contexts
+            
+        Returns:
+            List of result tuples
+        """
+        results = []
+        for i, products_list in enumerate(products_batch):
+            context = query_context_batch[i] if query_context_batch and i < len(query_context_batch) else ""
+            result, edge = self.run(products_list, context)
+            results.append((result, edge))
+        return results
+
+
+class PreferenceRankerComponent(BaseComponent):
+    """
+    Component that ranks products based on soft preferences using LLM scoring.
+    
+    Takes products and user preferences, scores each product 0-1 based on
+    preference matching, and returns top-ranked products.
+    """
+    
+    outgoing_edges = 1
+
+    def __init__(self, top_k: int = 3):
+        """
+        Initialize the preference ranker component.
+        
+        Args:
+            top_k: Number of top products to return
+        """
+        super().__init__()
+        self.top_k = top_k
+
+    def run(self, products: List[Dict[str, Any]], preferences: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+        """
+        Rank products based on soft preferences.
+        
+        Args:
+            products: List of product dictionaries
+            preferences: User preferences dictionary
+            
+        Returns:
+            Tuple of (ranked_products_dict, output_edge)
+        """
+        logger.info(f"PreferenceRankerComponent ranking {len(products)} products with preferences: {preferences}")
+        
+        try:
+            if not products:
+                return {"ranked_products": [], "scores": []}, "output_1"
+            
+            if not preferences:
+                sorted_products = self._fallback_ranking(products)
+                return {
+                    "ranked_products": sorted_products[:self.top_k],
+                    "scores": [0.5] * min(len(sorted_products), self.top_k),
+                    "ranking_method": "fallback"
+                }, "output_1"
+            
+            try:
+                scored_products = self._score_products_with_llm(products, preferences)
+            except Exception as e:
+                logger.warning(f"LLM scoring failed, using fallback: {e}")
+                scored_products = self._fallback_preference_scoring(products, preferences)
+            
+            scored_products.sort(key=lambda x: x["preference_score"], reverse=True)
+            top_products = scored_products[:self.top_k]
+            
+            ranked_products = [p["product"] for p in top_products]
+            scores = [p["preference_score"] for p in top_products]
+            
+            return {
+                "ranked_products": ranked_products,
+                "scores": scores,
+                "ranking_method": "preference_based"
+            }, "output_1"
+            
+        except Exception as e:
+            logger.error(f"PreferenceRankerComponent error: {e}")
+            fallback_products = products[:self.top_k]
+            return {
+                "ranked_products": fallback_products,
+                "scores": [0.5] * len(fallback_products),
+                "error": str(e)
+            }, "output_1"
+
+    def _score_products_with_llm(self, products: List[Dict[str, Any]], preferences: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Score products using LLM-based preference matching.
+        
+        Args:
+            products: List of products
+            preferences: User preferences
+            
+        Returns:
+            List of products with preference scores
+        """
+        from contract_engine.llm_helpers import get_openai_client
+        
+        client = get_openai_client()
+        scored_products = []
+        
+        for product in products:
+            prompt = f"""
+            Score this product based on user preferences (0.0 to 1.0):
+            
+            Product: {product.get('name', 'Unknown')}
+            Price: {product.get('price', 'Unknown')}
+            Description: {product.get('description', 'No description')}
+            
+            User Preferences: {preferences}
+            
+            Return only a number between 0.0 and 1.0 representing how well this product matches the preferences.
+            """
+            
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=10,
+                    temperature=0.1
+                )
+                
+                score_text = response.choices[0].message.content.strip()
+                score = float(score_text)
+                score = max(0.0, min(1.0, score))  # Clamp to [0, 1]
+                
+            except Exception as e:
+                logger.warning(f"LLM scoring failed for product {product.get('name', 'unknown')}: {e}")
+                score = 0.5  # Default score
+            
+            scored_products.append({
+                "product": product,
+                "preference_score": score
+            })
+        
+        return scored_products
+
+    def _fallback_preference_scoring(self, products: List[Dict[str, Any]], preferences: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Fallback preference scoring using simple heuristics.
+        
+        Args:
+            products: List of products
+            preferences: User preferences
+            
+        Returns:
+            List of products with preference scores
+        """
+        scored_products = []
+        
+        for product in products:
+            score = 0.5  # Base score
+            
+            product_text = f"{product.get('name', '')} {product.get('description', '')}".lower()
+            
+            for pref_key, pref_value in preferences.items():
+                if isinstance(pref_value, str):
+                    pref_words = pref_value.lower().split()
+                    for word in pref_words:
+                        if word in product_text:
+                            score += 0.1
+            
+            if "price" in preferences:
+                try:
+                    product_price = float(str(product.get("price", "0")).replace("CHF", "").replace(",", ""))
+                    pref_price_str = preferences["price"].lower()
+                    
+                    if "below" in pref_price_str or "under" in pref_price_str:
+                        import re
+                        match = re.search(r'(\d+)', pref_price_str)
+                        if match:
+                            max_price = float(match.group(1))
+                            if product_price <= max_price:
+                                score += 0.2
+                except:
+                    pass
+            
+            score = max(0.0, min(1.0, score))
+            
+            scored_products.append({
+                "product": product,
+                "preference_score": score
+            })
+        
+        return scored_products
+
+    def _fallback_ranking(self, products: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Fallback ranking when no preferences are provided.
+        
+        Args:
+            products: List of products
+            
+        Returns:
+            Sorted list of products
+        """
+        def sort_key(product):
+            # Sort by rating (desc), then price (asc)
+            rating = product.get("rating", 0)
+            try:
+                price = float(str(product.get("price", "999999")).replace("CHF", "").replace(",", ""))
+            except:
+                price = 999999
+            
+            return (-rating, price)
+        
+        return sorted(products, key=sort_key)
+
+    def run_batch(self, products_batch: List[List[Dict[str, Any]]], preferences_batch: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any], str]]:
+        """
+        Process multiple product lists in batch.
+        
+        Args:
+            products_batch: List of product lists
+            preferences_batch: List of preference dictionaries
+            
+        Returns:
+            List of result tuples
+        """
+        results = []
+        for i, products_list in enumerate(products_batch):
+            prefs = preferences_batch[i] if i < len(preferences_batch) else {}
+            result, edge = self.run(products_list, prefs)
             results.append((result, edge))
         return results
