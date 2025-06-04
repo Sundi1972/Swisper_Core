@@ -19,6 +19,10 @@ from .error_handling import (
     health_monitor, get_degraded_operation_message, 
     create_user_friendly_error_message, OperationMode
 )
+from .session_persistence import (
+    save_pipeline_execution, save_session_context, 
+    load_session_context, session_manager
+)
 
 # LLM Helper functions are no longer used by the slimmed FSM
 # from engine.llm_helpers import (
@@ -184,6 +188,13 @@ class ContractStateMachine:
         if transition.tools_used:
             self.context.tools_used.extend(transition.tools_used)
         
+        session_id = self._get_session_id()
+        if session_id:
+            try:
+                save_session_context(session_id, self.context)
+            except Exception as e:
+                self.logger.warning(f"Failed to save session context: {e}")
+        
         result = transition.to_dict()
         
         if transition.next_state and not transition.requires_user_input() and not transition.is_terminal():
@@ -213,12 +224,23 @@ class ContractStateMachine:
         self.logger.info(f"🔍 FSM (session: {session_id}): Searching for '{self.context.product_query}' using pipeline")
         
         try:
+            import time
+            start_time = time.time()
+            
             from .pipelines.product_search_pipeline import run_product_search
             pipeline_result = await run_product_search(
                 pipeline=self.product_search_pipeline,
                 query=self.context.product_query,
                 hard_constraints=getattr(self.context, 'constraints', [])
             )
+            
+            execution_time = time.time() - start_time
+            
+            try:
+                save_pipeline_execution(session_id, "product_search", pipeline_result, execution_time)
+                self.context.record_pipeline_execution("product_search", pipeline_result, execution_time)
+            except Exception as e:
+                self.logger.warning(f"Failed to record pipeline execution: {e}")
             
             if pipeline_result.get("status") == "error":
                 self.logger.error(f"FSM (session: {session_id}): Pipeline search failed: {pipeline_result.get('error')}")
@@ -396,6 +418,9 @@ class ContractStateMachine:
             return create_user_input_transition("No products found to match your preferences. Would you like to try a different search?")
         
         try:
+            import time
+            start_time = time.time()
+            
             # Run preference match pipeline
             pipeline_result = await run_preference_match(
                 pipeline=self.preference_match_pipeline,
@@ -403,6 +428,14 @@ class ContractStateMachine:
                 preferences=self.context.preferences or {},
                 context=self.context.product_query
             )
+            
+            execution_time = time.time() - start_time
+            
+            try:
+                save_pipeline_execution(session_id, "preference_match", pipeline_result, execution_time)
+                self.context.record_pipeline_execution("preference_match", pipeline_result, execution_time)
+            except Exception as e:
+                self.logger.warning(f"Failed to record pipeline execution: {e}")
             
             ranked_products = pipeline_result.get("ranked_products", [])
             scores = pipeline_result.get("scores", [])

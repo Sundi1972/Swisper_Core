@@ -33,6 +33,7 @@ except ImportError:
 # Import session store functions
 from . import session_store 
 from .session_store import set_pending_confirmation, get_pending_confirmation, clear_pending_confirmation
+from contract_engine.session_persistence import load_session_context, cleanup_old_sessions
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,13 @@ class Message(BaseModel):
 
 async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
     logger.info("🚀 Session start: Querying available tools and contracts", extra={"session_id": session_id})
+    
+    try:
+        cleaned_count = cleanup_old_sessions(max_age_hours=24)
+        if cleaned_count > 0:
+            logger.info(f"🧹 Cleaned up {cleaned_count} expired sessions", extra={"session_id": session_id})
+    except Exception as e:
+        logger.warning(f"Failed to cleanup old sessions: {e}")
     
     try:
         from .intent_extractor import load_available_contracts, load_available_tools
@@ -233,6 +241,11 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                 logger.info("🔍 Searching for products", extra={"session_id": session_id, "product": search_query, "criteria": criteria_data})
                 
                 fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+                
+                enhanced_context = load_session_context(session_id)
+                if enhanced_context:
+                    fsm.context = enhanced_context
+                    logger.info("🔄 Enhanced session context loaded", extra={"session_id": session_id, "state": enhanced_context.current_state})
                 
                 # Initialize FSM with new pipeline architecture if available
                 if PRODUCT_SEARCH_PIPELINE and PREFERENCE_MATCH_PIPELINE:
