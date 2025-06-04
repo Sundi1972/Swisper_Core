@@ -23,14 +23,14 @@ def create_product_search_pipeline() -> Pipeline:
     pipeline = Pipeline()
     
     search_component = MockGoogleShoppingComponent()
-    pipeline.add_node("search", search_component, inputs=["Query"])
+    pipeline.add_node(component=search_component, name="search", inputs=["Query"])
     
     analyzer_component = AttributeAnalyzerComponent()
-    pipeline.add_node("analyze_attributes", analyzer_component, inputs=["search"])
+    pipeline.add_node(component=analyzer_component, name="analyze_attributes", inputs=["search"])
     
     # Node 3: Result Limiter (if ≤50 pass, else return too_many_results)
     limiter_component = ResultLimiterComponent(max_results=50)
-    pipeline.add_node("limit_results", limiter_component, inputs=["analyze_attributes"])
+    pipeline.add_node(component=limiter_component, name="limit_results", inputs=["analyze_attributes"])
     
     logger.info("Product search pipeline created successfully")
     return pipeline

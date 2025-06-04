@@ -165,6 +165,24 @@ class AttributeAnalyzerComponent(BaseComponent):
                 return attrs
         
         return ["brand", "price range", "features", "size"]
+    
+    def run_batch(self, products_batch: List[List[Dict[str, Any]]], product_query_batch: List[str]) -> List[Tuple[Dict[str, Any], str]]:
+        """
+        Process multiple product lists in batch.
+        
+        Args:
+            products_batch: List of product lists
+            product_query_batch: List of product queries
+            
+        Returns:
+            List of result tuples
+        """
+        results = []
+        for i, products_list in enumerate(products_batch):
+            query = product_query_batch[i] if i < len(product_query_batch) else "unknown"
+            result, edge = self.run(products_list, query)
+            results.append((result, edge))
+        return results
 
 
 class ClarificationAskerComponent(BaseComponent):
