@@ -67,11 +67,24 @@ async def run_preference_match(pipeline: Pipeline, products: list, preferences: 
             logger.warning(f"Too many products for preference matching: {len(products)}, truncating to 50")
             products = products[:50]
         
-        result = pipeline.run(
-            query=products,
-            constraints=constraints or {},
-            preferences=preferences
-        )
+        try:
+            scraper_result, _ = pipeline.get_node("scrape_specs").run(products=products, query_context=context)
+            enhanced_products = scraper_result.get("enhanced_products", products)
+            
+            compat_constraints = constraints or {}
+            compat_result, _ = pipeline.get_node("check_compat").run(
+                products=enhanced_products, 
+                constraints=compat_constraints, 
+                product_query=context
+            )
+            compatible_products = compat_result.get("compatible_products", enhanced_products)
+            
+            ranker_result, _ = pipeline.get_node("rank_prefs").run(products=compatible_products, preferences=preferences)
+            
+            result = {"rank_prefs": ranker_result}
+        except Exception as pipeline_error:
+            logger.warning(f"Direct component execution failed: {pipeline_error}, using fallback ranking")
+            return _fallback_preference_match(products, preferences, error=str(pipeline_error))
         
         final_result = result.get("rank_prefs", {})
         
@@ -82,6 +95,7 @@ async def run_preference_match(pipeline: Pipeline, products: list, preferences: 
         final_result["status"] = "success"
         final_result["total_processed"] = len(products)
         final_result["preferences_applied"] = len(preferences) if preferences else 0
+        final_result["ranking_method"] = "pipeline"
         
         logger.info(f"Preference match completed: {len(final_result.get('ranked_products', []))} products ranked")
         return final_result

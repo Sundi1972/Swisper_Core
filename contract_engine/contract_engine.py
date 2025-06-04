@@ -14,6 +14,7 @@ from .state_transitions import (
     create_success_transition, create_error_transition, 
     create_user_input_transition, create_completion_transition
 )
+from .pipelines.preference_match_pipeline import create_preference_match_pipeline, run_preference_match
 
 # LLM Helper functions are no longer used by the slimmed FSM
 # from engine.llm_helpers import (
@@ -40,9 +41,10 @@ class ContractStateMachine:
             )
             return
 
-        # Initialize product search pipeline
+        # Initialize pipelines
         from .pipelines.product_search_pipeline import create_product_search_pipeline
         self.product_search_pipeline = create_product_search_pipeline()
+        self.preference_match_pipeline = create_preference_match_pipeline(top_k=3)
         
         # Initialize SwisperContext
         self.context = SwisperContext(
@@ -102,6 +104,7 @@ class ContractStateMachine:
             "ask_clarification": self.handle_ask_clarification_state,
             "wait_for_preferences": self.handle_wait_for_preferences_state,
             "filter_products": self.handle_filter_products_state,
+            "match_preferences": self.handle_match_preferences_state,
             "check_compatibility": self.handle_check_compatibility_state,
             "rank_and_select": self.handle_rank_and_select_state,
             "present_options": self.handle_rank_and_select_state,  # Map present_options to rank_and_select
@@ -351,15 +354,8 @@ class ContractStateMachine:
             self.logger.info(f"FSM (session: {session_id}): Extracted preferences: {preferences}")
             self.logger.info(f"FSM (session: {session_id}): Extracted constraints: {constraints}")
             
-            if len(self.context.search_results) > 20:
-                self.logger.info(f"FSM (session: {session_id}): Many products ({len(self.context.search_results)}), applying filtering. Transition: wait_for_preferences → filter_products")
-                next_state = ContractState.MATCH_PREFERENCES
-            elif len(self.context.search_results) > 10:
-                self.logger.info(f"FSM (session: {session_id}): Moderate products ({len(self.context.search_results)}), checking compatibility. Transition: wait_for_preferences → check_compatibility")
-                next_state = ContractState.MATCH_PREFERENCES
-            else:
-                self.logger.info(f"FSM (session: {session_id}): Few products ({len(self.context.search_results)}), proceeding to ranking. Transition: wait_for_preferences → rank_and_select")
-                next_state = ContractState.MATCH_PREFERENCES
+            self.logger.info(f"FSM (session: {session_id}): Processing {len(self.context.search_results)} products with preferences. Transition: wait_for_preferences → match_preferences")
+            next_state = ContractState.MATCH_PREFERENCES
             
             return create_success_transition(
                 next_state=next_state,
@@ -371,6 +367,86 @@ class ContractStateMachine:
             self.logger.error(f"❌ FSM (session: {session_id}): Error analyzing preferences: {e}")
             return create_success_transition(next_state=ContractState.MATCH_PREFERENCES)
     
+    async def handle_match_preferences_state(self, user_input: Optional[str] = None) -> StateTransition:
+        """Handle the match_preferences state using preference match pipeline"""
+        session_id = self._get_session_id()
+        self.logger.info(f"🎯 FSM (session: {session_id}): Matching preferences using pipeline")
+        
+        if not self.context.search_results:
+            self.logger.warning(f"FSM (session: {session_id}): No search results to match preferences against")
+            return create_user_input_transition("No products found to match your preferences. Would you like to try a different search?")
+        
+        try:
+            # Run preference match pipeline
+            pipeline_result = await run_preference_match(
+                pipeline=self.preference_match_pipeline,
+                products=self.context.search_results,
+                preferences=self.context.preferences or {},
+                context=self.context.product_query
+            )
+            
+            ranked_products = pipeline_result.get("ranked_products", [])
+            scores = pipeline_result.get("scores", [])
+            ranking_method = pipeline_result.get("ranking_method", "pipeline")
+            
+            if not ranked_products:
+                self.logger.warning(f"FSM (session: {session_id}): Pipeline returned no ranked products")
+                return create_user_input_transition("I couldn't find products that match your preferences. Would you like to adjust your requirements or try a different search?")
+            
+            try:
+                from contract_engine.llm_helpers import generate_product_recommendation
+                recommendation_data = generate_product_recommendation(
+                    ranked_products, 
+                    self.context.preferences or {}, 
+                    self.context.constraints or {}
+                )
+                tools_used = ["preference_match_pipeline", "generate_product_recommendation"]
+            except Exception as e:
+                self.logger.warning(f"FSM (session: {session_id}): LLM recommendation failed, using fallback: {e}")
+                recommendation_data = self._fallback_product_recommendation(ranked_products)
+                tools_used = ["preference_match_pipeline"]
+            
+            context_updates = {
+                "top_products": ranked_products,
+                "product_recommendations": recommendation_data,
+                "preference_scores": scores,
+                "ranking_method": ranking_method
+            }
+            
+            numbered_list = "\n".join([
+                f"{item['number']}. {item['name']} - {item['price']} ({item['key_specs']})"
+                for item in recommendation_data.get("numbered_products", [])
+            ])
+            
+            recommendation = recommendation_data.get("recommendation", {})
+            recommended_choice = recommendation.get("choice", 1)
+            reasoning = recommendation.get("reasoning", "Best overall match for your preferences")
+            
+            self.logger.info(f"🏆 FSM (session: {session_id}): Pipeline matched {len(ranked_products)} products using {ranking_method}")
+            self.logger.info(f"🔄 FSM (session: {session_id}): Transition: match_preferences → confirm_purchase")
+            
+            num_products = len(ranked_products)
+            ask_user_message = (
+                f"Based on your preferences, here are the top {num_products} options:\n\n{numbered_list}\n\n"
+                f"My recommendation: Option {recommended_choice}\n"
+                f"Reason: {reasoning}\n\n"
+                f"Please enter the number (1-{num_products}) of your choice, or type 'yes' to go with my recommendation."
+            )
+            
+            return StateTransition(
+                next_state=ContractState.CONFIRM_PURCHASE,
+                ask_user=ask_user_message,
+                status="waiting_for_input",
+                context_updates=context_updates,
+                tools_used=tools_used
+            )
+            
+        except Exception as e:
+            self.logger.error(f"❌ FSM (session: {session_id}): Preference matching pipeline failed: {e}")
+            return create_user_input_transition(
+                f"I encountered an error while matching your preferences. Could you try again or adjust your requirements?"
+            )
+
     def handle_filter_products_state(self, user_input: Optional[str] = None) -> StateTransition:
         """Handle the filter_products state"""
         session_id = self._get_session_id()
