@@ -117,6 +117,7 @@ class ContractStateMachine:
             "rank_and_select": self.handle_rank_and_select_state,
             "present_options": self.handle_rank_and_select_state,  # Map present_options to rank_and_select
             "confirm_selection": self.handle_confirm_selection_state,
+            "confirm_purchase": self.handle_confirm_selection_state,  # Map confirm_purchase to confirm_selection
             "confirm_order": self.handle_confirm_order_state,
             "completed": self.handle_completed_state,
             "cancelled": self.handle_cancelled_state,
