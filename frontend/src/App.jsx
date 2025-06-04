@@ -11,6 +11,8 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isFullWidth, setIsFullWidth] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [currentSearchQuery, setCurrentSearchQuery] = useState('');
+  const [searchHighlightEnabled, setSearchHighlightEnabled] = useState(false);
   const chatRef = useRef();
 
   const tabs = [
@@ -21,6 +23,8 @@ function App() {
 
   const handleSearch = (query) => {
     console.log('Search query:', query);
+    setSearchHighlightEnabled(query.trim().length > 0);
+    setCurrentSearchQuery(query);
   };
 
   const handleSectionSelect = (section) => {
@@ -34,8 +38,28 @@ function App() {
     }
   };
 
-  const handleSearchResultSelect = (sessionId, messageIndex) => {
+  const handleSearchResultSelect = async (sessionId, messageIndex) => {
     console.log('Search result selected:', sessionId, messageIndex);
+    
+    try {
+      setCurrentSessionId(sessionId);
+      
+      if (chatRef.current) {
+        await chatRef.current.loadSession(sessionId);
+        
+        setTimeout(() => {
+          if (chatRef.current && chatRef.current.scrollToMessage) {
+            chatRef.current.scrollToMessage(messageIndex);
+          }
+        }, 500);
+      }
+      
+      setSearchHighlightEnabled(true);
+      
+    } catch (error) {
+      console.error('Error switching to session:', error);
+      alert('Failed to switch to selected session. Please try again.');
+    }
   };
 
   const handleToggleFullWidth = () => {
@@ -64,6 +88,7 @@ function App() {
       <Header 
         onSearch={handleSearch}
         onSearchResultSelect={handleSearchResultSelect}
+        onSearchQueryChange={setCurrentSearchQuery}
         isFullWidth={isFullWidth}
         onToggleFullWidth={handleToggleFullWidth}
         onToggleSidebar={handleToggleSidebar}
@@ -88,7 +113,13 @@ function App() {
           />
           
           <div className="flex-1 mt-6">
-            {activeTab === 'chat' && <SwisperChat ref={chatRef} />}
+            {activeTab === 'chat' && (
+              <SwisperChat 
+                ref={chatRef} 
+                searchQuery={currentSearchQuery}
+                highlightEnabled={searchHighlightEnabled}
+              />
+            )}
             {activeTab === 'contracts' && <ContractViewer />}
             {activeTab === 'logs' && <LogViewer />}
           </div>

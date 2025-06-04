@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
 
-const SwisperChat = forwardRef((props, ref) => {
+const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, ref) => {
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Hi, how can I help you today?" }
   ]);
@@ -127,8 +127,74 @@ const SwisperChat = forwardRef((props, ref) => {
     console.log('Add file triggered');
   };
 
+  const loadSession = async (targetSessionId) => {
+    try {
+      localStorage.setItem("swisper_session_id", targetSessionId);
+      setSessionId(targetSessionId);
+      
+      const savedMessages = localStorage.getItem(`chat_history_${targetSessionId}`);
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        setMessages(parsedMessages);
+      } else {
+        try {
+          const response = await fetch(`http://localhost:8000/api/sessions/${targetSessionId}/messages`);
+          if (response.ok) {
+            const data = await response.json();
+            setMessages(data.messages || [{ role: "assistant", content: "Hi, how can I help you today?" }]);
+          } else {
+            setMessages([{ role: "assistant", content: "Hi, how can I help you today?" }]);
+          }
+        } catch (error) {
+          console.error('Error fetching session messages:', error);
+          setMessages([{ role: "assistant", content: "Hi, how can I help you today?" }]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading session:', error);
+    }
+  };
+
+  const highlightSearchTerms = (content, query) => {
+    try {
+      if (!query.trim() || !highlightEnabled) return content;
+      
+      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedQuery})`, 'gi');
+      
+      const parts = content.split(regex);
+      return parts.map((part, index) => {
+        if (regex.test(part)) {
+          return `<span class="bg-orange-300 text-black px-1 rounded font-medium">${part}</span>`;
+        }
+        return part;
+      }).join('');
+    } catch (error) {
+      console.error('Error highlighting search terms:', error);
+      return content;
+    }
+  };
+
+  const scrollToMessage = (messageIndex) => {
+    setTimeout(() => {
+      const messageElements = document.querySelectorAll('[data-message-index]');
+      if (messageElements[messageIndex]) {
+        messageElements[messageIndex].scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        messageElements[messageIndex].classList.add('ring-2', 'ring-orange-400');
+        setTimeout(() => {
+          messageElements[messageIndex].classList.remove('ring-2', 'ring-orange-400');
+        }, 3000);
+      }
+    }, 100);
+  };
+
   useImperativeHandle(ref, () => ({
     handleNewSession,
+    loadSession,
+    scrollToMessage,
     getSessionId: () => sessionId
   }));
 
@@ -146,7 +212,10 @@ const SwisperChat = forwardRef((props, ref) => {
 
       <div className="flex-1 overflow-y-auto space-y-6 mb-20 min-h-0">
         {messages.map((msg, i) => (
-          <div key={i} className={`w-3/4 ${msg.role === 'user' ? 'ml-auto' : 'ml-0'}`}>
+          <div 
+            key={i} 
+            data-message-index={i}
+            className={`w-3/4 ${msg.role === 'user' ? 'ml-auto' : 'ml-0'}`}>
             <div className={`${
               msg.role === 'user' 
                 ? 'bg-[#141923] rounded-lg p-4' 
@@ -156,37 +225,55 @@ const SwisperChat = forwardRef((props, ref) => {
                 msg.role === 'user' ? 'text-[#f9fbfc]' : 'text-[#f9fbfc]'
               }`}>
                 {msg.role === 'assistant' ? (
-                  <ReactMarkdown
-                    rehypePlugins={[rehypeHighlight]}
-                    components={{
-                      code: ({inline, className, children, ...props}) => {
-                        return !inline ? (
-                          <pre className="bg-[#1a1a1a] rounded-lg p-3 overflow-x-auto">
-                            <code className={className} {...props}>
+                  searchQuery && highlightEnabled ? (
+                    <div 
+                      className="text-sm leading-5"
+                      dangerouslySetInnerHTML={{
+                        __html: highlightSearchTerms(msg.content, searchQuery)
+                      }} 
+                    />
+                  ) : (
+                    <ReactMarkdown
+                      rehypePlugins={[rehypeHighlight]}
+                      components={{
+                        code: ({inline, className, children, ...props}) => {
+                          return !inline ? (
+                            <pre className="bg-[#1a1a1a] rounded-lg p-3 overflow-x-auto">
+                              <code className={className} {...props}>
+                                {children}
+                              </code>
+                            </pre>
+                          ) : (
+                            <code className="bg-[#1a1a1a] px-1 py-0.5 rounded text-sm" {...props}>
                               {children}
                             </code>
-                          </pre>
-                        ) : (
-                          <code className="bg-[#1a1a1a] px-1 py-0.5 rounded text-sm" {...props}>
-                            {children}
-                          </code>
-                        );
-                      },
-                      p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
-                      ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                      ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                      li: ({children}) => <li className="text-[#f9fbfc]">{children}</li>,
-                      h1: ({children}) => <h1 className="text-lg font-bold mb-2 text-[#f9fbfc]">{children}</h1>,
-                      h2: ({children}) => <h2 className="text-base font-bold mb-2 text-[#f9fbfc]">{children}</h2>,
-                      h3: ({children}) => <h3 className="text-sm font-bold mb-2 text-[#f9fbfc]">{children}</h3>,
-                      strong: ({children}) => <strong className="font-bold text-[#f9fbfc]">{children}</strong>,
-                      em: ({children}) => <em className="italic text-[#f9fbfc]">{children}</em>
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
+                          );
+                        },
+                        p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                        ul: ({children}) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                        ol: ({children}) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                        li: ({children}) => <li className="text-[#f9fbfc]">{children}</li>,
+                        h1: ({children}) => <h1 className="text-lg font-bold mb-2 text-[#f9fbfc]">{children}</h1>,
+                        h2: ({children}) => <h2 className="text-base font-bold mb-2 text-[#f9fbfc]">{children}</h2>,
+                        h3: ({children}) => <h3 className="text-sm font-bold mb-2 text-[#f9fbfc]">{children}</h3>,
+                        strong: ({children}) => <strong className="font-bold text-[#f9fbfc]">{children}</strong>,
+                        em: ({children}) => <em className="italic text-[#f9fbfc]">{children}</em>
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  )
                 ) : (
-                  <p style={{ whiteSpace: 'pre-line' }}>{msg.content}</p>
+                  searchQuery && highlightEnabled ? (
+                    <div 
+                      style={{ whiteSpace: 'pre-line' }}
+                      dangerouslySetInnerHTML={{
+                        __html: highlightSearchTerms(msg.content, searchQuery)
+                      }}
+                    />
+                  ) : (
+                    <p style={{ whiteSpace: 'pre-line' }}>{msg.content}</p>
+                  )
                 )}
               </div>
             </div>
