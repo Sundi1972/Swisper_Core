@@ -4,6 +4,7 @@ Synchronous version of product search pipeline for FSM integration.
 import logging
 from typing import Dict, List, Any, Optional
 from haystack import Pipeline
+from tool_adapter.mock_google import google_shopping_search
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ def run_product_search_sync(
     hard_constraints: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
-    Synchronous wrapper for product search pipeline execution.
+    Synchronous wrapper for product search pipeline execution using real SearchAPI.
     
     Args:
         pipeline: The Haystack pipeline to run
@@ -26,31 +27,23 @@ def run_product_search_sync(
     try:
         logger.info(f"Running sync product search for query: {query}")
         
-        mock_results = [
-            {
-                "name": f"High-end {query}",
-                "price": "1299 CHF",
-                "rating": 4.8,
-                "brand": "NVIDIA",
-                "specs": {"memory": "16GB", "cores": "10752"}
-            },
-            {
-                "name": f"Mid-range {query}",
-                "price": "799 CHF", 
-                "rating": 4.5,
-                "brand": "AMD",
-                "specs": {"memory": "12GB", "cores": "7680"}
-            },
-            {
-                "name": f"Budget {query}",
-                "price": "399 CHF",
-                "rating": 4.2,
-                "brand": "NVIDIA",
-                "specs": {"memory": "8GB", "cores": "5888"}
-            }
-        ]
+        search_results = google_shopping_search(query)
         
-        filtered_results = mock_results
+        transformed_results = []
+        for item in search_results:
+            if isinstance(item, dict) and "error" not in item:
+                transformed_item = {
+                    "name": item.get("name", ""),
+                    "price": item.get("price", 0),
+                    "rating": item.get("rating", 0),
+                    "brand": item.get("brand", ""),
+                    "specs": item.get("specs", {}),
+                    "link": item.get("link", ""),
+                    "thumbnail": item.get("thumbnail", "")
+                }
+                transformed_results.append(transformed_item)
+        
+        filtered_results = transformed_results
         if hard_constraints:
             logger.info(f"Applying hard constraints: {hard_constraints}")
             for constraint in hard_constraints:
@@ -59,7 +52,7 @@ def run_product_search_sync(
                         max_price = float(constraint.lower().split("price <")[1].strip().replace("chf", "").strip())
                         filtered_results = [
                             item for item in filtered_results 
-                            if float(item["price"].replace(" CHF", "")) < max_price
+                            if isinstance(item.get("price"), (int, float)) and item["price"] < max_price
                         ]
                     except (ValueError, IndexError):
                         logger.warning(f"Could not parse price constraint: {constraint}")
@@ -74,8 +67,8 @@ def run_product_search_sync(
         return {
             "status": status,
             "items": filtered_results,
-            "attributes": ["price", "brand", "rating", "memory", "cores"],
-            "total_found": len(mock_results),
+            "attributes": ["price", "brand", "rating", "name"],
+            "total_found": len(transformed_results),
             "after_constraints": len(filtered_results)
         }
         
