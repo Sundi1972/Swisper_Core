@@ -6,6 +6,7 @@ from .summary_store import SummaryStore
 from .token_counter import TokenCounter
 from .redis_client import redis_client
 from contract_engine.context import SwisperContext
+from .milvus_store import milvus_semantic_store
 
 class MemoryManager:
     """Unified memory management interface for orchestrator integration"""
@@ -117,8 +118,12 @@ class MemoryManager:
             self.logger.error(f"Failed to trigger summarization: {e}")
     
     def _create_summary(self, messages: List[Dict[str, Any]]) -> str:
-        """Create summary from messages (placeholder for LLM integration)"""
+        """Create summary from messages using T5-based RollingSummariser"""
         try:
+            from contract_engine.pipelines.rolling_summariser import summarize_messages
+            return summarize_messages(messages)
+        except Exception as e:
+            self.logger.error(f"Failed to create T5 summary: {e}")
             if not messages:
                 return ""
             
@@ -133,10 +138,6 @@ class MemoryManager:
                 return combined_content[:200] + "..."
             
             return combined_content
-            
-        except Exception as e:
-            self.logger.error(f"Failed to create summary: {e}")
-            return ""
     
     def set_session_config(self, session_id: str, config: Dict[str, Any]):
         """Set per-session memory configuration"""
@@ -186,5 +187,38 @@ class MemoryManager:
     def is_available(self) -> bool:
         """Check if memory system is available"""
         return redis_client.is_available()
+    
+    def add_semantic_memory(self, user_id: str, content: str, memory_type: str = "preference", metadata: Dict[str, Any] = None) -> bool:
+        """Add semantic memory for long-term storage"""
+        try:
+            return milvus_semantic_store.add_memory(user_id, content, memory_type, metadata)
+        except Exception as e:
+            self.logger.error(f"Failed to add semantic memory: {e}")
+            return False
+
+    def get_semantic_context(self, user_id: str, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+        """Get relevant semantic memories for query"""
+        try:
+            return milvus_semantic_store.search_memories(user_id, query, top_k)
+        except Exception as e:
+            self.logger.error(f"Failed to get semantic context: {e}")
+            return []
+
+    def get_enhanced_context(self, session_id: str, user_id: str = None, query: str = None) -> Dict[str, Any]:
+        """Get complete memory context including semantic memories"""
+        try:
+            context = self.get_context(session_id)
+            
+            if user_id and query:
+                semantic_memories = self.get_semantic_context(user_id, query)
+                context["semantic_memories"] = semantic_memories
+            else:
+                context["semantic_memories"] = []
+            
+            return context
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get enhanced context: {e}")
+            return self.get_context(session_id)
 
 memory_manager = MemoryManager()
