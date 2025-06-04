@@ -7,11 +7,15 @@ from pydantic import BaseModel
 import datetime 
 import json 
 
-# Import Haystack pipeline creation function for contract path
+# Import pipeline creation functions for contract path
 try:
     from contract_engine.contract_pipeline import create_product_selection_pipeline
+    from contract_engine.pipelines.product_search_pipeline import create_product_search_pipeline
+    from contract_engine.pipelines.preference_match_pipeline import create_preference_match_pipeline
 except ImportError: 
     from contract_engine.contract_pipeline import create_product_selection_pipeline
+    create_product_search_pipeline = None
+    create_preference_match_pipeline = None
 
 # Import RAG function
 try:
@@ -29,6 +33,7 @@ except ImportError:
 # Import session store functions
 from . import session_store 
 from .session_store import set_pending_confirmation, get_pending_confirmation, clear_pending_confirmation
+from contract_engine.session_persistence import load_session_context, cleanup_old_sessions
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +46,7 @@ except Exception as e:
     logger.error("Failed to initialize AsyncOpenAI client: %s", e, exc_info=True)
     async_client = None
 
-# Initialize Product Selection Pipeline (Contract Path)
+# Initialize Pipelines (Contract Path)
 try:
     PRODUCT_SELECTION_PIPELINE = create_product_selection_pipeline()
     logger.info("Product Selection Pipeline initialized successfully.")
@@ -49,11 +54,44 @@ except Exception as e:
     logger.error("Failed to initialize Product Selection Pipeline: %s", e, exc_info=True)
     PRODUCT_SELECTION_PIPELINE = None
 
+# Initialize new pipeline architecture
+try:
+    if create_product_search_pipeline and create_preference_match_pipeline:
+        PRODUCT_SEARCH_PIPELINE = create_product_search_pipeline()
+        PREFERENCE_MATCH_PIPELINE = create_preference_match_pipeline(top_k=3)
+        logger.info("New pipeline architecture initialized successfully.")
+    else:
+        PRODUCT_SEARCH_PIPELINE = None
+        PREFERENCE_MATCH_PIPELINE = None
+        logger.warning("New pipeline architecture not available, using legacy pipeline.")
+except Exception as e:
+    logger.error("Failed to initialize new pipeline architecture: %s", e, exc_info=True)
+    PRODUCT_SEARCH_PIPELINE = None
+    PREFERENCE_MATCH_PIPELINE = None
+
 class Message(BaseModel): 
     role: str
     content: str
 
 async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
+    logger.info("🚀 Session start: Querying available tools and contracts", extra={"session_id": session_id})
+    
+    try:
+        cleaned_count = cleanup_old_sessions(max_age_hours=24)
+        if cleaned_count > 0:
+            logger.info(f"🧹 Cleaned up {cleaned_count} expired sessions", extra={"session_id": session_id})
+    except Exception as e:
+        logger.warning(f"Failed to cleanup old sessions: {e}")
+    
+    try:
+        from .intent_extractor import load_available_contracts, load_available_tools
+        contracts = load_available_contracts()
+        tools = load_available_tools()
+        logger.info("📋 Available contracts loaded", extra={"session_id": session_id, "contracts": list(contracts.keys())})
+        logger.info("🔧 Available tools loaded", extra={"session_id": session_id, "tools": list(tools.keys()) if tools else []})
+    except Exception as e:
+        logger.error("Failed to load contracts/tools", extra={"session_id": session_id, "error": str(e)})
+    
     logger.info("🚀 Orchestrator handling request", extra={"session_id": session_id, "message_count": len(messages)})
     
     if not messages:
@@ -106,28 +144,39 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
 
     stored_fsm = session_store.get_contract_fsm(session_id)
     if stored_fsm:
-        logger.info("Session %s: Continuing stored contract FSM with user input: '%s'", session_id, last_user_message_content)
+        logger.info("🔄 FSM continuation: Retrieved stored FSM for session %s with user input: '%s'", session_id, last_user_message_content)
+        logger.info("🔄 FSM continuation: Current state before processing: %s", stored_fsm.context.current_state if hasattr(stored_fsm, 'context') else 'unknown')
         try:
             result = stored_fsm.next(last_user_message_content)
+            logger.info("🔄 FSM continuation: Processing completed", extra={
+                "session_id": session_id,
+                "result_keys": list(result.keys()) if isinstance(result, dict) else "not_dict",
+                "new_state": stored_fsm.context.current_state if hasattr(stored_fsm, 'context') else 'unknown'
+            })
             
             if "ask_user" in result:
                 reply_content = result["ask_user"]
+                logger.info("🔄 FSM continuation: FSM asking user", extra={"session_id": session_id, "question": reply_content})
                 
                 # If it's a confirmation question, set pending confirmation
                 if "confirm" in reply_content.lower() and hasattr(stored_fsm, 'context') and stored_fsm.context.selected_product:
                     set_pending_confirmation(session_id, stored_fsm.context.selected_product)
                     # Clear stored FSM since we're moving to confirmation
                     session_store.set_contract_fsm(session_id, None)
+                    logger.info("🔄 FSM continuation: Moving to confirmation, FSM cleared", extra={"session_id": session_id})
                 elif hasattr(stored_fsm, 'context') and stored_fsm.context.current_state in ["cancelled"]:
                     session_store.set_contract_fsm(session_id, None)
+                    logger.info("🔄 FSM continuation: FSM cancelled, cleared from storage", extra={"session_id": session_id})
                 else:
                     session_store.set_contract_fsm(session_id, stored_fsm)
+                    logger.info("🔄 FSM continuation: FSM updated and stored for next interaction", extra={"session_id": session_id, "state": stored_fsm.context.current_state if hasattr(stored_fsm, 'context') else 'unknown'})
             else:
                 reply_content = "Sorry, I couldn't process your request. Could you try rephrasing?"
                 session_store.set_contract_fsm(session_id, None)
+                logger.error("🔄 FSM continuation: FSM did not return ask_user, clearing FSM", extra={"session_id": session_id, "result": result})
                 
         except Exception as e:
-            logger.error("Error continuing stored contract FSM for session %s: %s", session_id, e, exc_info=True)
+            logger.error("🔄 FSM continuation: Error continuing stored contract FSM for session %s: %s", session_id, e, exc_info=True)
             reply_content = "Sorry, there was an error processing your request."
             session_store.set_contract_fsm(session_id, None)
         
@@ -144,11 +193,19 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         intent_type = intent_data.get("intent_type")
         parameters = intent_data.get("parameters", {})
         
-        logger.info("🎯 Intent extracted", extra={
+        logger.info("🎯 User intent extracted", extra={
             "session_id": session_id, 
             "intent": intent_type, 
-            "confidence": intent_data.get("confidence", 0.0)
+            "confidence": intent_data.get("confidence", 0.0),
+            "reasoning": intent_data.get("reasoning", "")
         })
+        
+        if intent_type == "contract":
+            contract_template = parameters.get("contract_template")
+            logger.info("🎯 User intent matched to Contract", extra={
+                "session_id": session_id,
+                "contract_template": contract_template
+            })
         
     except Exception as e:
         logger.error("Intent extraction failed, using fallback: %s", e)
@@ -175,15 +232,29 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                 from contract_engine.contract_engine import ContractStateMachine
                 from contract_engine.llm_helpers import extract_initial_criteria
                 
-                logger.info("Session %s: Extracting criteria from prompt: '%s'", session_id, last_user_message_content)
+                logger.info("📝 Extracting criteria from user prompt", extra={"session_id": session_id, "prompt": last_user_message_content})
                 criteria_data = extract_initial_criteria(last_user_message_content)
                 
                 search_query = parameters.get("extracted_query", last_user_message_content)
                 
                 logger.info("📋 Criteria extracted", extra={"session_id": session_id, "criteria": criteria_data})
-                logger.info("🔍 Search query prepared", extra={"session_id": session_id, "search_query": search_query})
+                logger.info("🔍 Searching for products", extra={"session_id": session_id, "product": search_query, "criteria": criteria_data})
                 
                 fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+                
+                enhanced_context = load_session_context(session_id)
+                if enhanced_context:
+                    fsm.context = enhanced_context
+                    logger.info("🔄 Enhanced session context loaded", extra={"session_id": session_id, "state": enhanced_context.current_state})
+                
+                # Initialize FSM with new pipeline architecture if available
+                if PRODUCT_SEARCH_PIPELINE and PREFERENCE_MATCH_PIPELINE:
+                    fsm.product_search_pipeline = PRODUCT_SEARCH_PIPELINE
+                    fsm.preference_match_pipeline = PREFERENCE_MATCH_PIPELINE
+                    logger.info("🔧 FSM initialized with new pipeline architecture", extra={"session_id": session_id})
+                else:
+                    logger.warning("🔧 FSM initialized with legacy architecture", extra={"session_id": session_id})
+                
                 fsm.fill_parameters({
                     "product": search_query,
                     "session_id": session_id,
@@ -193,16 +264,23 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                     "enhanced_query": search_query
                 })
                 
+                if hasattr(fsm, 'context') and fsm.context:
+                    fsm.context.session_id = session_id
+                
+                logger.info("🔧 FSM initialized", extra={"session_id": session_id, "initial_state": fsm.context.current_state})
+                
                 result = fsm.next()
                 
-                logger.info("🔧 FSM context initialized", extra={
+                logger.info("🔧 FSM first execution completed", extra={
                     "session_id": session_id,
+                    "result_keys": list(result.keys()) if isinstance(result, dict) else "not_dict",
                     "context_state": fsm.context.current_state,
                     "context_status": fsm.context.contract_status
                 })
                 
                 if "ask_user" in result:
                     reply_content = result["ask_user"]
+                    logger.info("❓ FSM asking user", extra={"session_id": session_id, "question": reply_content})
                     
                     if "confirm" in reply_content.lower() and hasattr(fsm, 'context') and fsm.context.selected_product:
                         set_pending_confirmation(session_id, fsm.context.selected_product)
@@ -210,8 +288,10 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                         session_store.set_contract_fsm(session_id, None)
                     else:
                         session_store.set_contract_fsm(session_id, fsm)
+                        logger.info("💾 FSM stored for continuation", extra={"session_id": session_id, "state": fsm.context.current_state})
                 else:
                     reply_content = "Sorry, I couldn't find a suitable product for your query. Could you try rephrasing or a different product?"
+                    logger.error("❌ FSM did not return ask_user", extra={"session_id": session_id, "result": result})
                     
             except Exception as e:
                 logger.error("Error running enhanced contract flow for session %s: %s", session_id, e, exc_info=True)
