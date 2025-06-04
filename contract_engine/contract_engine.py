@@ -117,7 +117,7 @@ class ContractStateMachine:
             "rank_and_select": self.handle_rank_and_select_state,
             "present_options": self.handle_rank_and_select_state,  # Map present_options to rank_and_select
             "confirm_selection": self.handle_confirm_selection_state,
-            "confirm_purchase": self.handle_confirm_selection_state,  # Map confirm_purchase to confirm_selection
+            "confirm_purchase": self.handle_confirm_order_state,  # Map confirm_purchase to confirm_order
             "confirm_order": self.handle_confirm_order_state,
             "complete_order": self.handle_confirm_order_state,  # Map complete_order to confirm_order
             "completed": self.handle_completed_state,
@@ -157,8 +157,16 @@ class ContractStateMachine:
             }
 
     def _get_session_id(self) -> str:
-        """Get session ID from contract parameters"""
-        return self.contract.get("parameters", {}).get("session_id", "unknown")
+        """Get session ID from contract parameters or context"""
+        # First try contract parameters
+        session_id = self.contract.get("parameters", {}).get("session_id")
+        if session_id and session_id != "unknown":
+            return session_id
+        
+        if hasattr(self.context, 'session_id') and self.context.session_id:
+            return self.context.session_id
+            
+        return "default_fsm_session"
     
     def _handle_cancel_request(self, user_input: str, session_id: str) -> Optional[StateTransition]:
         """Check if user input is a cancel request and handle it"""
@@ -185,7 +193,17 @@ class ContractStateMachine:
             self.contract[key] = value
         
         if transition.next_state and transition.next_state.value != self.context.current_state:
+            session_id = self._get_session_id()
+            self.logger.info(f"FSM (session: {session_id}): State transition: {self.context.current_state} → {transition.next_state.value}")
             self.context.update_state(transition.next_state.value)
+            
+            # Force immediate session save after state transition
+            if session_id:
+                try:
+                    save_session_context(session_id, self.context)
+                    self.logger.info(f"FSM (session: {session_id}): Forced session save after state transition to {transition.next_state.value}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to force save session context after state transition: {e}")
         
         if transition.tools_used:
             self.context.tools_used.extend(transition.tools_used)
@@ -200,6 +218,7 @@ class ContractStateMachine:
         result = transition.to_dict()
         
         if transition.next_state and not transition.requires_user_input() and not transition.is_terminal():
+            self.logger.info(f"FSM (session: {session_id}): Auto-transitioning to {transition.next_state.value}")
             return self.next()
         
         return result
@@ -696,7 +715,7 @@ class ContractStateMachine:
             self.logger.info(f"FSM (session: {session_id}): User selected {product_name}. Transition: confirm_selection → confirm_order")
             
             return StateTransition(
-                next_state=ContractState.COMPLETE_ORDER,
+                next_state=ContractState.CONFIRM_PURCHASE,
                 ask_user=f"You selected: {product_name}{price_info}. Shall I go ahead and confirm this order?",
                 status="waiting_for_input",
                 context_updates=context_updates,
@@ -706,9 +725,9 @@ class ContractStateMachine:
             return create_user_input_transition("I didn't understand your selection. Please enter a number (1-5) or 'yes' for my recommendation.")
     
     def handle_confirm_order_state(self, user_input: Optional[str] = None) -> StateTransition:
-        """Handle the confirm_order state"""
+        """Handle the confirm_order state - simplified mock implementation"""
         session_id = self._get_session_id()
-        self.logger.info(f"FSM (session: {session_id}): In confirm_order, user_input: '{user_input}'")
+        self.logger.info(f"FSM (session: {session_id}): In confirm_order (mock), user_input: '{user_input}'")
         
         cancel_transition = self._handle_cancel_request(user_input, session_id)
         if cancel_transition:
@@ -716,66 +735,75 @@ class ContractStateMachine:
         
         product_name = self.context.selected_product.get("name", "the product") if self.context.selected_product else "the product"
         product_price = self.context.selected_product.get("price", "price not available") if self.context.selected_product else "price not available"
-        product_context = f"{product_name} at {product_price} CHF"
-        
-        try:
-            from contract_engine.llm_helpers import is_response_relevant
-            
-            try:
-                relevance_check = is_response_relevant(
-                    user_input, 
-                    "yes/no confirmation for product purchase", 
-                    product_context
-                )
-                
-                if not relevance_check.get("is_relevant", True):
-                    return create_user_input_transition(
-                        f"I didn't understand your response. Please answer 'yes' to confirm the purchase "
-                        f"of {product_name} at {product_price} CHF, 'no' to decline, or 'cancel' to exit."
-                    )
-            except Exception as e:
-                self.logger.warning(f"⚠️ FSM (session: {session_id}): Relevance check failed, treating as unclear response: {e}")
-        except ImportError:
-            pass
         
         if user_input and user_input.lower() in ["yes", "y", "confirm", "ok", "okay", "proceed", "sure"]:
-            subtask = {
-                "id": "confirm_order",
-                "type": "confirmation",
-                "status": "completed",
-                "response": user_input
+            self.logger.info(f"FSM (session: {session_id}): Order confirmed (mock). Clearing session and completing.")
+            
+            context_updates = {
+                "session_cleared": True,
+                "confirmation_pending": False,
+                "selected_product": None,
+                "top_products": [],
+                "search_results": [],
+                "preferences": {},
+                "constraints": []
             }
             
-            context_updates = {"confirmation_pending": False}
-            contract_updates = {"subtasks": self.contract.get("subtasks", []) + [subtask]}
+            contract_updates = {"status": "completed", "mock_order": True}
             
-            self.logger.info(f"FSM (session: {session_id}): Order confirmed by user. Transition: confirm_order → completed")
-            
-            return create_success_transition(
+            return StateTransition(
                 next_state=ContractState.COMPLETED,
+                status="completed",
+                user_message=f"✅ Order confirmed! Your {product_name} at {product_price} has been processed (mock). Session cleared. How can I help you next?",
                 context_updates=context_updates,
                 contract_updates=contract_updates
             )
             
         elif user_input and user_input.lower() in ["no", "n", "decline", "reject"]:
-            self.logger.info(f"FSM (session: {session_id}): Order declined by user.")
+            self.logger.info(f"FSM (session: {session_id}): Order declined (mock). Clearing session and cancelling.")
             
-            contract_updates = {"status": "cancelled_by_user"}
             context_updates = {
+                "session_cleared": True,
                 "contract_status": "cancelled",
-                "is_cancelled": True
+                "is_cancelled": True,
+                "selected_product": None,
+                "top_products": [],
+                "search_results": [],
+                "preferences": {},
+                "constraints": []
             }
+            
+            contract_updates = {"status": "cancelled_by_user", "mock_order": True}
             
             return StateTransition(
                 next_state=ContractState.CANCELLED,
                 status="cancelled",
-                user_message="Order cancelled. Is there anything else I can help you with?",
+                user_message="❌ Order cancelled. Session cleared. Is there anything else I can help you with?",
                 context_updates=context_updates,
                 contract_updates=contract_updates
             )
         else:
-            return create_user_input_transition(
-                f"I didn't understand your response. Please answer 'yes' to confirm the purchase of {product_name} at {product_price} CHF, or 'no' to decline."
+            self.logger.info(f"FSM (session: {session_id}): Invalid response '{user_input}' - cancelling order and clearing session.")
+            
+            context_updates = {
+                "session_cleared": True,
+                "contract_status": "cancelled",
+                "is_cancelled": True,
+                "selected_product": None,
+                "top_products": [],
+                "search_results": [],
+                "preferences": {},
+                "constraints": []
+            }
+            
+            contract_updates = {"status": "cancelled_invalid_response", "mock_order": True}
+            
+            return StateTransition(
+                next_state=ContractState.CANCELLED,
+                status="cancelled",
+                user_message="❌ I didn't understand your response. Order cancelled and session cleared. Please say 'I want to buy a [product]' to start a new purchase.",
+                context_updates=context_updates,
+                contract_updates=contract_updates
             )
     
     def handle_completed_state(self, user_input: Optional[str] = None) -> StateTransition:
