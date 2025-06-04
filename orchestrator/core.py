@@ -7,11 +7,15 @@ from pydantic import BaseModel
 import datetime 
 import json 
 
-# Import Haystack pipeline creation function for contract path
+# Import pipeline creation functions for contract path
 try:
     from contract_engine.contract_pipeline import create_product_selection_pipeline
+    from contract_engine.pipelines.product_search_pipeline import create_product_search_pipeline
+    from contract_engine.pipelines.preference_match_pipeline import create_preference_match_pipeline
 except ImportError: 
     from contract_engine.contract_pipeline import create_product_selection_pipeline
+    create_product_search_pipeline = None
+    create_preference_match_pipeline = None
 
 # Import RAG function
 try:
@@ -41,13 +45,28 @@ except Exception as e:
     logger.error("Failed to initialize AsyncOpenAI client: %s", e, exc_info=True)
     async_client = None
 
-# Initialize Product Selection Pipeline (Contract Path)
+# Initialize Pipelines (Contract Path)
 try:
     PRODUCT_SELECTION_PIPELINE = create_product_selection_pipeline()
     logger.info("Product Selection Pipeline initialized successfully.")
 except Exception as e:
     logger.error("Failed to initialize Product Selection Pipeline: %s", e, exc_info=True)
     PRODUCT_SELECTION_PIPELINE = None
+
+# Initialize new pipeline architecture
+try:
+    if create_product_search_pipeline and create_preference_match_pipeline:
+        PRODUCT_SEARCH_PIPELINE = create_product_search_pipeline()
+        PREFERENCE_MATCH_PIPELINE = create_preference_match_pipeline(top_k=3)
+        logger.info("New pipeline architecture initialized successfully.")
+    else:
+        PRODUCT_SEARCH_PIPELINE = None
+        PREFERENCE_MATCH_PIPELINE = None
+        logger.warning("New pipeline architecture not available, using legacy pipeline.")
+except Exception as e:
+    logger.error("Failed to initialize new pipeline architecture: %s", e, exc_info=True)
+    PRODUCT_SEARCH_PIPELINE = None
+    PREFERENCE_MATCH_PIPELINE = None
 
 class Message(BaseModel): 
     role: str
@@ -214,6 +233,15 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                 logger.info("🔍 Searching for products", extra={"session_id": session_id, "product": search_query, "criteria": criteria_data})
                 
                 fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+                
+                # Initialize FSM with new pipeline architecture if available
+                if PRODUCT_SEARCH_PIPELINE and PREFERENCE_MATCH_PIPELINE:
+                    fsm.product_search_pipeline = PRODUCT_SEARCH_PIPELINE
+                    fsm.preference_match_pipeline = PREFERENCE_MATCH_PIPELINE
+                    logger.info("🔧 FSM initialized with new pipeline architecture", extra={"session_id": session_id})
+                else:
+                    logger.warning("🔧 FSM initialized with legacy architecture", extra={"session_id": session_id})
+                
                 fsm.fill_parameters({
                     "product": search_query,
                     "session_id": session_id,
