@@ -242,7 +242,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                 logger.info("📋 Criteria extracted", extra={"session_id": session_id, "criteria": criteria_data})
                 logger.info("🔍 Searching for products", extra={"session_id": session_id, "product": search_query, "criteria": criteria_data})
                 
-                fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+                fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
                 
                 enhanced_context = load_session_context(session_id)
                 if enhanced_context:
