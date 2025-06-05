@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import patch
-from contract_engine.unified_session_store import UnifiedSessionStore
+from swisper_core.session import UnifiedSessionStore
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 def test_complete_purchase_flow_with_persistence():
     """Test full user flow: search → refine → recommend → purchase"""

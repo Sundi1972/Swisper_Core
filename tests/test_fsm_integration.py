@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 class TestFSMIntegration:
     def test_fsm_initialization(self):

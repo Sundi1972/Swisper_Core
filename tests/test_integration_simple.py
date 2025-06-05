@@ -4,7 +4,7 @@ Simple integration tests for the Swisper Core refactored architecture.
 Tests core functionality without complex mocking to verify the architecture works.
 """
 import pytest
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 from contract_engine.pipelines.product_search_pipeline import create_product_search_pipeline
 from contract_engine.pipelines.preference_match_pipeline import create_preference_match_pipeline
 
@@ -49,7 +49,7 @@ class TestSimpleIntegration:
     
     def test_session_persistence_basic(self):
         """Test basic session persistence functionality"""
-        from contract_engine.session_persistence import save_session_context, load_session_context
+        from swisper_core.session import save_session_context, load_session_context
         
         context = SwisperContext(
             session_id="persist_test_001",
@@ -67,21 +67,23 @@ class TestSimpleIntegration:
     
     def test_performance_monitoring_basic(self):
         """Test basic performance monitoring functionality"""
-        from contract_engine.performance_monitor import PerformanceMonitor, PipelineTimer
+        from swisper_core.monitoring import PerformanceMonitor, PipelineTimer
         
-        PerformanceMonitor.clear_metrics()
+        monitor = PerformanceMonitor()
+        monitor.clear_metrics()
         
-        with PipelineTimer("test_operation"):
+        with PipelineTimer("test_operation") as timer:
             import time
             time.sleep(0.01)  # Small delay for timing
         
-        stats = PerformanceMonitor.get_stats("test_operation")
-        assert stats.get("count", 0) >= 1
+        monitor.record_operation("test_operation", timer.duration, True)
+        stats = monitor.get_operation_stats("test_operation")
+        assert stats.get("total_calls", 0) >= 1
         assert stats.get("avg_duration", 0) > 0
     
     def test_error_handling_basic(self):
         """Test basic error handling functionality"""
-        from contract_engine.error_handling import health_monitor
+        from swisper_core.errors import health_monitor
         
         health_monitor.report_service_error("test_service", Exception("test error"))
         

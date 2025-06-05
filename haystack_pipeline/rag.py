@@ -7,8 +7,9 @@ from haystack.dataclasses import Document
 from haystack.pipelines import Pipeline
 import os
 import logging
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _document_store_instance = None
 def get_document_store():

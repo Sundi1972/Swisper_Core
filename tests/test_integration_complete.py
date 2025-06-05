@@ -7,7 +7,7 @@ verifying the clean separation between FSM (control plane) and Pipelines (data p
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 from contract_engine.pipelines.product_search_pipeline import create_product_search_pipeline
 from contract_engine.pipelines.preference_match_pipeline import create_preference_match_pipeline
 from orchestrator.core import handle
@@ -135,7 +135,7 @@ class TestCompleteIntegration:
     
     def test_session_persistence_throughout_flow(self):
         """Test session persistence and recovery throughout complete flow"""
-        from contract_engine.session_persistence import save_session_context, load_session_context
+        from swisper_core.session import save_session_context, load_session_context
         
         session_id = "integration_persistence_001"
         
@@ -183,7 +183,8 @@ class TestCompleteIntegration:
     
     def test_error_handling_throughout_flow(self):
         """Test error handling and fallback mechanisms throughout complete flow"""
-        from contract_engine.error_handling import health_monitor, OperationMode
+        from swisper_core.errors import OperationMode
+        from swisper_core.monitoring import health_monitor
         
         session_id = "integration_error_001"
         
@@ -223,7 +224,7 @@ class TestCompleteIntegration:
     
     def test_performance_monitoring_integration(self):
         """Test performance monitoring throughout complete flow"""
-        from contract_engine.performance_monitor import PerformanceMonitor
+        from swisper_core.monitoring import PerformanceMonitor
         
         PerformanceMonitor.clear_metrics()
         
@@ -269,7 +270,7 @@ class TestCompleteIntegration:
     
     def test_pipeline_caching_effectiveness(self):
         """Test that pipeline caching improves performance on repeated operations"""
-        from contract_engine.performance_monitor import attribute_cache, pipeline_cache
+        from swisper_core.monitoring import attribute_cache, pipeline_cache
         
         attribute_cache.clear()
         pipeline_cache.clear()

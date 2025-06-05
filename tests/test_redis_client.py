@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import patch, MagicMock
 import os
-from contract_engine.memory.redis_client import RedisClient
+from swisper_core.clients import RedisClient
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_initialization(mock_redis):
     """Test Redis client initialization"""
     mock_pool = MagicMock()
@@ -29,7 +29,7 @@ def test_redis_client_initialization(mock_redis):
         )
         mock_client.ping.assert_called_once()
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_get_client_success(mock_redis):
     """Test successful Redis client retrieval"""
     mock_client = MagicMock()
@@ -40,7 +40,7 @@ def test_redis_client_get_client_success(mock_redis):
     
     assert client == mock_client
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_connection_failure(mock_redis):
     """Test Redis client connection failure handling"""
     mock_redis.Redis.side_effect = Exception("Connection failed")
@@ -50,7 +50,7 @@ def test_redis_client_connection_failure(mock_redis):
     with pytest.raises(Exception, match="Redis client not available"):
         redis_client.get_client()
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_availability_check(mock_redis):
     """Test Redis availability checking"""
     mock_client = MagicMock()
@@ -64,7 +64,7 @@ def test_redis_client_availability_check(mock_redis):
     mock_client.ping.side_effect = Exception("Ping failed")
     assert redis_client.is_available() is False
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_get_info(mock_redis):
     """Test Redis info retrieval"""
     mock_client = MagicMock()
@@ -82,7 +82,7 @@ def test_redis_client_get_info(mock_redis):
     assert info["used_memory"] == 1024
     assert info["connected_clients"] == 5
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_memory_usage(mock_redis):
     """Test Redis memory usage metrics"""
     mock_client = MagicMock()
@@ -104,7 +104,7 @@ def test_redis_client_memory_usage(mock_redis):
     assert memory_usage["maxmemory"] == 4294967296
     assert memory_usage["evicted_keys"] == 10
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_circuit_breaker_integration(mock_redis):
     """Test Redis client circuit breaker integration"""
     mock_client = MagicMock()
@@ -115,7 +115,7 @@ def test_redis_client_circuit_breaker_integration(mock_redis):
     client = redis_client.get_client()
     assert client == mock_client
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_error_handling(mock_redis):
     """Test Redis client error handling"""
     mock_redis.Redis.side_effect = Exception("Redis connection error")
@@ -130,7 +130,7 @@ def test_redis_client_error_handling(mock_redis):
     for key in expected_keys:
         assert key in memory_usage
 
-@patch('contract_engine.memory.redis_client.redis')
+@patch('swisper_core.clients.redis.redis')
 def test_redis_client_default_environment_values(mock_redis):
     """Test Redis client with default environment values"""
     mock_client = MagicMock()

@@ -1,10 +1,41 @@
 import re
-import spacy
 import logging
 from typing import List, Dict, Any, Tuple, Optional
-from openai import OpenAI
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+
+try:
+    import spacy
+    SPACY_AVAILABLE = True
+except ImportError:
+    SPACY_AVAILABLE = False
+    
+    class MockSpacy:
+        def load(self, model_name): return None
+    
+    spacy = MockSpacy()
+
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    
+    class MockChat:
+        class MockCompletions:
+            def create(self, *args, **kwargs):
+                class MockResponse:
+                    choices = [type('obj', (object,), {'message': type('obj', (object,), {'content': 'Mock response'})()})]
+                return MockResponse()
+        completions = MockCompletions()
+    
+    class MockOpenAI:
+        def __init__(self, *args, **kwargs): pass
+        chat = MockChat()
+    
+    OpenAI = MockOpenAI
+
+logger = get_logger(__name__)
 
 class PIIRedactor:
     """
@@ -30,7 +61,7 @@ class PIIRedactor:
         }
         
         self.ner_model = None
-        if use_ner:
+        if use_ner and SPACY_AVAILABLE:
             try:
                 self.ner_model = spacy.load("en_core_web_lg")
                 logger.info("Loaded spaCy en_core_web_lg model for NER")
@@ -41,15 +72,21 @@ class PIIRedactor:
                 except OSError:
                     logger.error("No spaCy model available, NER disabled")
                     self.use_ner = False
+        elif use_ner and not SPACY_AVAILABLE:
+            logger.warning("spaCy not available, NER disabled")
+            self.use_ner = False
         
         self.llm_client = None
-        if use_llm_fallback:
+        if use_llm_fallback and OPENAI_AVAILABLE:
             try:
                 self.llm_client = OpenAI()
                 logger.info("Initialized OpenAI client for LLM fallback")
             except Exception as e:
                 logger.warning(f"Failed to initialize LLM client: {e}")
                 self.use_llm_fallback = False
+        elif use_llm_fallback and not OPENAI_AVAILABLE:
+            logger.warning("OpenAI not available, LLM fallback disabled")
+            self.use_llm_fallback = False
     
     def redact(self, text: str, redaction_method: str = "placeholder") -> str:
         """

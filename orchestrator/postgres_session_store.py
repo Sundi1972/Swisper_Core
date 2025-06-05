@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from .database import db_manager, SwisperSession
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def get_chat_history(session_id: str) -> List[Dict[str, str]]:
     try:
@@ -230,7 +231,7 @@ def get_contract_fsm(session_id: str):
             if context_data:
                 try:
                     from contract_engine.contract_engine import ContractStateMachine
-                    from contract_engine.context import SwisperContext
+                    from swisper_core import SwisperContext
                     
                     contract_template = context_data.get('contract_template', 'contract_templates/purchase_item.yaml')
                     fsm = ContractStateMachine(contract_template)

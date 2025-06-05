@@ -1,6 +1,6 @@
 import pytest
 from contract_engine.memory.message_serializer import MessageSerializer
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 def test_message_serialization_roundtrip():
     """Test message serialization and deserialization roundtrip"""

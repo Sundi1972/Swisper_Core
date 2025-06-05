@@ -7,8 +7,8 @@ context saving, and session recovery.
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
-from contract_engine.session_persistence import session_manager, save_session_context, load_session_context
+from swisper_core import SwisperContext
+from swisper_core.session import session_manager, save_session_context, load_session_context
 from orchestrator import core as orchestrator_core
 
 
@@ -90,7 +90,7 @@ class TestSessionIntegration:
     
     def test_session_cleanup_functionality(self):
         """Test session cleanup functionality"""
-        from contract_engine.session_persistence import cleanup_old_sessions
+        from swisper_core.session import cleanup_old_sessions
         
         result = cleanup_old_sessions(max_age_hours=24)
         assert isinstance(result, int)

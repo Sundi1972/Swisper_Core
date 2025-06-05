@@ -5,8 +5,9 @@ import logging
 from typing import Dict, List, Any, Optional
 from haystack import Pipeline
 from tool_adapter.mock_google import google_shopping_search
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def run_product_search_sync(
     pipeline: Pipeline,

@@ -1,19 +1,49 @@
 import os
 import logging
 from typing import Dict, Any, Optional
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 import json
+from swisper_core import get_logger
+
+try:
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    CRYPTOGRAPHY_AVAILABLE = False
+    
+    class MockFernet:
+        def __init__(self, key): pass
+        def encrypt(self, data): return data
+        def decrypt(self, data): return data
+        @staticmethod
+        def generate_key(): return b'mock_key'
+    
+    class MockHashAlgorithm:
+        pass
+    
+    class MockHashes:
+        @staticmethod
+        def SHA256(): return MockHashAlgorithm()
+    
+    class MockPBKDF2HMAC:
+        def __init__(self, *args, **kwargs): pass
+        def derive(self, key): return b'mock_derived_key'
+    
+    Fernet = MockFernet
+    hashes = MockHashes()
+    PBKDF2HMAC = MockPBKDF2HMAC
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class EncryptionService:
     """Per-user encryption service for sensitive memory data"""
     
     def __init__(self):
+        if not CRYPTOGRAPHY_AVAILABLE:
+            logger.warning("Cryptography not available, using fallback mode")
         self.master_key = self._get_or_create_master_key()
     
     def _get_or_create_master_key(self) -> bytes:

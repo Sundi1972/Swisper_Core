@@ -6,8 +6,9 @@ from typing import Dict, Any, List, Optional
 import yaml
 
 from .llm_adapter import get_llm_adapter
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def load_available_contracts() -> Dict[str, Any]:
     """Load available contract templates"""

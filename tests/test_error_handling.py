@@ -5,11 +5,15 @@ Tests fallback modes, graceful degradation, and user-friendly error messages.
 """
 import pytest
 from unittest.mock import patch, MagicMock
-from contract_engine.error_handling import (
-    SystemHealthMonitor, OperationMode, ErrorSeverity, PipelineError,
+from swisper_core.errors import (
+    PipelineError, ErrorSeverity, OperationMode,
     create_user_friendly_error_message, handle_pipeline_error,
-    create_fallback_product_search, create_fallback_preference_ranking,
-    get_degraded_operation_message, health_monitor
+    get_degraded_operation_message
+)
+from swisper_core.monitoring import SystemHealthMonitor, health_monitor
+
+from swisper_core.errors import (
+    create_fallback_product_search, create_fallback_preference_ranking
 )
 
 
@@ -241,7 +245,7 @@ class TestIntegrationScenarios:
     
     def test_pipeline_error_with_health_monitoring(self):
         """Test pipeline error handling integrates with health monitoring"""
-        from contract_engine.error_handling import health_monitor
+        from swisper_core.monitoring import health_monitor
         
         health_monitor.__init__()
         

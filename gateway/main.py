@@ -22,7 +22,8 @@ except ImportError as e:
     # Log an error and re-raise to prevent app startup if dependencies are missing.
     # This helps in diagnosing PYTHONPATH or module availability issues early.
     logging.basicConfig(level="ERROR", format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    logger = logging.getLogger(__name__)
+    from swisper_core import get_logger
+    logger = get_logger(__name__)
     logger.error("Failed to import project modules. Ensure PYTHONPATH is set correctly. Error: %s", e, exc_info=True)
     raise
 
@@ -34,9 +35,10 @@ logging.basicConfig(
     level=numeric_log_level,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
-logger = logging.getLogger(__name__)
+from swisper_core import get_logger
+logger = get_logger(__name__)
 
-from .log_handler import log_buffer, WebSocketLogHandler
+from gateway.log_handler import log_buffer, WebSocketLogHandler
 
 app = FastAPI()
 

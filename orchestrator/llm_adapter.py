@@ -2,8 +2,9 @@ import os
 import logging
 from typing import Dict, Any, Optional
 from openai import OpenAI
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class LLMAdapter:
     """Base class for LLM adapters"""

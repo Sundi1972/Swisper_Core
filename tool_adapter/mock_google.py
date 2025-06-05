@@ -2,9 +2,9 @@ import json
 import os
 import requests
 from typing import List, Dict, Any
-import logging
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Determine path to mock_gpus.json relative to this file or an absolute path
 # This assumes tool_adapter is one level down from repository root, and tests is also one level down.

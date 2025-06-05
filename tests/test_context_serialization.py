@@ -1,5 +1,5 @@
 import pytest
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 def test_context_roundtrip_preserves_fsm_state():
     """Ensure SwisperContext.to_dict() → from_dict() preserves exact FSM state"""

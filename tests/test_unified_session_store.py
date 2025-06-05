@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from contract_engine.unified_session_store import UnifiedSessionStore
+from swisper_core.session import UnifiedSessionStore
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 def test_atomic_state_save_with_rollback():
     """Test atomic state saving with rollback on failure"""

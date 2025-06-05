@@ -2,13 +2,13 @@ import json
 import logging
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext, get_logger
 
 class MessageSerializer:
     """Dedicated serialization component for memory storage"""
     
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.version = "1.0"
     
     def serialize_message(self, message: Dict[str, Any]) -> str:

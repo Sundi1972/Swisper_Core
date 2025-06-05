@@ -1,9 +1,9 @@
 import os
-import logging
 import datetime
 from typing import List, Dict, Any, Optional
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
     from .postgres_session_store import (
@@ -135,7 +135,7 @@ except Exception as e:
             if context_data:
                 try:
                     from contract_engine.contract_engine import ContractStateMachine
-                    from contract_engine.context import SwisperContext
+                    from swisper_core import SwisperContext
                     
                     contract_template = context_data.get('contract_template', 'contract_templates/purchase_item.yaml')
                     fsm = ContractStateMachine(contract_template)

@@ -3,8 +3,9 @@ import logging
 from typing import Dict, Any, List
 
 from .llm_adapter import get_llm_adapter
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def orchestrate_tools(user_message: str, tools_needed: List[str]) -> str:
     """Orchestrate tool usage using LLM reasoning"""

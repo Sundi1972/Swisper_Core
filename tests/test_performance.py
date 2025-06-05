@@ -6,7 +6,7 @@ Tests caching, timing, and performance monitoring functionality.
 import pytest
 import time
 from unittest.mock import patch, MagicMock
-from contract_engine.performance_monitor import (
+from swisper_core.monitoring import (
     PerformanceCache, PipelineTimer, PerformanceMonitor,
     create_cache_key, timed_operation, cached_operation
 )
