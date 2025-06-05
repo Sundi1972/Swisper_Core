@@ -1,131 +1,232 @@
 # Swisper Core
 
-Swisper contract engine backend with modular pipeline architecture.
+An intelligent AI assistant system implementing a sophisticated contract-based interaction framework with local AI model processing for Switzerland data sovereignty compliance.
 
-## Architecture Overview
+## Overview
 
-Swisper Core implements a clean separation between the **Finite State Machine (FSM)** as a control plane and **Haystack Pipelines** as a data plane:
+Swisper Core provides a robust, scalable AI assistant platform that combines Finite State Machine (FSM) control with Haystack pipeline data processing. The system is designed for Switzerland hosting requirements with local model processing and comprehensive privacy controls.
 
-- **FSM (Control Plane)**: Manages conversation flow, user context, approvals, and state transitions
-- **Pipelines (Data Plane)**: Handle stateless data processing (search, scrape, filter, rank)
+### Key Features
 
-## Components
+- **Contract-Based Interactions**: YAML-defined contracts with explicit state transitions
+- **Local AI Processing**: T5 summarization and sentence-transformer embeddings for data sovereignty
+- **Multi-Tier Memory System**: Ephemeral buffer, short-term summaries, long-term semantic memory, and auditable artifacts
+- **Haystack Pipeline Integration**: Modular data processing with product search and preference matching
+- **Switzerland Compliance**: Local model processing, PII extraction, and privacy-by-design architecture
+- **Performance Optimization**: Intelligent caching, async processing, and comprehensive monitoring
 
-### Core Components
-- **Contract Engine**: FSM-based contract flow management with explicit state transitions
-- **Gateway**: FastAPI-based API gateway with session management
-- **Haystack Pipeline**: Modular data processing pipelines for product search and preference matching
-- **Orchestrator**: Intent routing and session orchestration
-- **Tool Adapter**: External service integrations (Google Shopping, checkout tools)
+## Architecture
 
-### Pipeline Architecture
-
-#### Product Search Pipeline
 ```
-SearchComponent → AttributeAnalyzer → ResultLimiter
+┌─────────────────────────────────────────────────────────────────┐
+│                        Client Layer                             │
+│  React Frontend │ Authentication │ Voice I/O │ Device Integration│
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+┌─────────────────────────────────────────────────────────────────┐
+│                     Gateway API                                 │
+│  FastAPI Gateway │ JWT Validation │ Request Routing │ Security   │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+┌─────────────────────────────────────────────────────────────────┐
+│                AI Assistant Core                                │
+│  Contract Engine │ Pipeline Manager │ Memory Manager │ Orchestrator│
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+┌─────────────────────────────────────────────────────────────────┐
+│                     Data Layer                                 │
+│  PostgreSQL │ Redis Cluster │ Milvus Vector DB │ S3 Storage     │
+└─────────────────────────────────────────────────────────────────┘
 ```
-- Searches products via Google Shopping API
-- Analyzes product attributes and ranges
-- Limits results (≤50 products) or requests constraint refinement
-
-#### Preference Match Pipeline
-```
-SpecScraper → CompatibilityChecker → PreferenceRanker
-```
-- Scrapes detailed product specifications
-- Validates hard constraints compatibility
-- Ranks products by soft preferences using LLM scoring
-
-## Key Features
-
-### Performance Optimization
-- **Intelligent Caching**: 60-minute TTL for attribute analysis, 30-minute for pipeline results
-- **Performance Monitoring**: Comprehensive timing and metrics collection
-- **Graceful Degradation**: Fallback mechanisms when external services unavailable
-
-### Session Management
-- **Enhanced Persistence**: Pipeline execution history and performance metrics
-- **Automatic Cleanup**: 24-hour session retention with expired data removal
-- **Context Recovery**: Session restoration with cached pipeline results
-
-### Error Handling & Resilience
-- **Health Monitoring**: System health tracking for external services
-- **User-Friendly Errors**: Clear error messages for common failure scenarios
-- **Fallback Modes**: Graceful degradation when LLM or web services fail
 
 ## Quick Start
 
+### Prerequisites
+
+- Python 3.12+ (managed via pyenv)
+- Node.js 18+ (managed via nvm)
+- Docker and Docker Compose
+- Poetry for Python dependency management
+
 ### Installation
+
 ```bash
+# Clone repository
+git clone https://github.com/Sundi1972/Swisper_Core.git
+cd Swisper_Core
+
+# Install Python dependencies
 poetry install
+
+# Install AI models locally (Switzerland compliance)
+poetry run python scripts/download_models.py
+
+# Setup databases
+docker-compose -f docker/docker-compose.yml up -d
+
+# Install frontend dependencies
+cd frontend && npm install && cd ..
+
+# Run development servers
+poetry run python gateway/main.py &
+cd frontend && npm run dev
 ```
 
 ### Running Tests
+
 ```bash
 # Run all tests
 poetry run pytest
 
-# Run specific test suites
-poetry run pytest tests/test_performance.py          # Performance tests
-poetry run pytest tests/test_pipeline_components.py # Pipeline component tests
-poetry run pytest tests/test_fsm_integration.py     # FSM integration tests
-```
-
-### Development
-```bash
 # Run linting
 poetry run pylint contract_engine gateway haystack_pipeline orchestrator tool_adapter
 
-# Start development server
-poetry run python gateway/main.py
+# Run frontend tests
+cd frontend && npm test && cd ..
+
+# Run end-to-end tests
+npx playwright test
 ```
 
-## Architecture Benefits
+## Core Components
 
-### Separation of Concerns
-- FSM handles conversation logic, pipelines handle data processing
-- Clear boundaries between control flow and data transformation
-- Reusable pipeline components across different contracts
+### Contract Engine
+- **FSM-based contract execution** with explicit state transitions
+- **YAML contract definitions** for maintainable conversation flows
+- **State persistence and recovery** for session continuity
+- **Audit trail** for compliance and debugging
 
-### Testability & Maintainability
-- Each pipeline component is a pure function with clear inputs/outputs
-- State transitions are explicit and auditable
-- Comprehensive test coverage with isolated unit tests
+### Haystack Pipeline
+- **Product Search Pipeline**: Google Shopping API integration with intelligent caching
+- **Preference Match Pipeline**: LLM-based ranking with compatibility checking
+- **Modular architecture** for reusable components across contracts
 
-### Performance & Scalability
-- Pipeline results cached to reduce redundant processing
-- Performance monitoring for optimization insights
-- Async pipeline execution for improved responsiveness
+### Memory Manager
+- **Ephemeral Buffer** (Redis): Recent messages for immediate context
+- **Short-Term Summary** (Redis+Postgres): Rolling T5-based summarization
+- **Long-Term Semantic Memory** (Milvus): Vector search for personalization
+- **Auditable Artifacts** (S3): Complete logs for compliance
 
-## Contract Flow Example
-
-```python
-# 1. Intent Detection
-intent = extract_intent("I want to buy a washing machine")
-
-# 2. FSM Initialization
-fsm = ContractStateMachine("purchase_item.yaml")
-fsm.context = SwisperContext(product_query="washing machine")
-
-# 3. Product Search Pipeline
-search_result = await product_search_pipeline.run(
-    query="washing machine",
-    hard_constraints=["price < 2000 CHF"]
-)
-
-# 4. Preference Match Pipeline  
-preference_result = await preference_match_pipeline.run(
-    items=search_result["items"],
-    soft_preferences={"brand": "Bosch", "energy_rating": "A+++"}
-)
-
-# 5. User Confirmation & Checkout
-selected_product = user_selection(preference_result["ranked_products"][:3])
-order_id = checkout_tool.place_order(selected_product)
-```
+### Gateway
+- **FastAPI-based API gateway** with async request handling
+- **JWT authentication** with role-based access control
+- **Request routing** and validation
+- **Rate limiting** and security controls
 
 ## Documentation
 
-- [Refactoring Plan](docs/REFACTORING_PLAN.md) - Complete architectural vision and implementation strategy
-- [Implementation Steps](docs/IMPLEMENTATION_STEPS.md) - Detailed breakdown of refactoring phases
-- [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md) - Progress tracking and completion status
+### Architecture Documentation
+- [Overall Architecture](docs/architecture/overview.md) - System architecture and component interaction
+- [Tools and Contract Management](docs/architecture/tools-and-contracts.md) - FSM and pipeline integration
+- [Session and Context Management](docs/architecture/session-management.md) - State persistence and recovery
+- [Memory Management](docs/architecture/memory-management.md) - Multi-tier memory architecture
+
+### Deployment Guides
+- [Production Strategy](docs/deployment/production-strategy.md) - Switzerland hosting and scalability
+- [Local Setup Guide](docs/deployment/local-setup.md) - Step-by-step development environment
+- [Frontend Template Guide](docs/deployment/frontend-template-guide.md) - Reusable frontend template
+
+### Testing Documentation
+- [Testing Strategy](docs/testing/strategy.md) - Comprehensive testing approach
+- [Test Scenarios](docs/testing/scenarios.md) - End-to-end test definitions
+
+### Implementation History
+- [Implementation Plans](docs/implementation-plans/) - Feature development history and checklists
+
+## Development
+
+### Project Structure
+
+```
+Swisper_Core/
+├── contract_engine/          # FSM-based contract execution
+├── gateway/                  # FastAPI API gateway
+├── haystack_pipeline/        # Data processing pipelines
+├── orchestrator/             # Session and pipeline orchestration
+├── tool_adapter/             # External service integrations
+├── memory_manager/           # Multi-tier memory system
+├── frontend/                 # React application
+├── frontend-template/        # Reusable frontend template
+├── tests/                    # Comprehensive test suite
+├── docs/                     # Documentation
+└── Architecture/             # PlantUML diagrams
+```
+
+### Code Quality
+
+- **Linting**: pylint for Python, ESLint for TypeScript
+- **Type Checking**: mypy for Python, TypeScript for frontend
+- **Testing**: pytest for backend, Jest for frontend, Playwright for e2e
+- **Coverage**: Minimum 80% for critical components
+
+### Contributing
+
+1. **Fork the repository** and create a feature branch
+2. **Follow code style guidelines** and add comprehensive tests
+3. **Update documentation** for any architectural changes
+4. **Run the full test suite** before submitting
+5. **Create a pull request** with detailed description
+
+### Branch Naming Convention
+- Feature branches: `feature/descriptive-name`
+- Bug fixes: `bugfix/issue-description`
+- Documentation: `docs/topic-name`
+
+## Performance
+
+### Benchmarks
+- **Product Search**: <5 seconds for complex queries
+- **Preference Matching**: <10 seconds for 50 products
+- **Memory Retrieval**: <500ms for semantic search
+- **Session Persistence**: <100ms for context serialization
+
+### Caching Strategy
+- **Attribute Analysis**: 60-minute TTL
+- **Pipeline Results**: 30-minute TTL
+- **Session Data**: 24-hour retention
+- **Vector Embeddings**: Persistent with version control
+
+## Security and Privacy
+
+### Switzerland Data Sovereignty
+- **Local AI Models**: T5 and sentence-transformers hosted locally
+- **No External Data Transmission**: Sensitive data never leaves Swiss borders
+- **Compliance**: Swiss Federal Data Protection Act (FADP) and GDPR
+
+### Privacy Features
+- **PII Detection and Redaction**: Automatic identification and secure handling
+- **Consent Management**: Granular user consent tracking
+- **Data Retention**: Configurable policies with automatic cleanup
+- **Encryption**: At rest and in transit with Swiss-standard algorithms
+
+## Monitoring and Observability
+
+### Metrics Collection
+- **Pipeline Performance**: Execution times and success rates
+- **Memory Usage**: Buffer sizes and cache hit ratios
+- **API Performance**: Response times and error rates
+- **User Behavior**: Interaction patterns and conversion metrics
+
+### Logging
+- **Structured Logging**: JSON format with correlation IDs
+- **Log Aggregation**: Centralized collection and analysis
+- **Error Tracking**: Automatic error detection and alerting
+- **Audit Trails**: Complete interaction history for compliance
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For questions, issues, or contributions:
+- **Issues**: [GitHub Issues](https://github.com/Sundi1972/Swisper_Core/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Sundi1972/Swisper_Core/discussions)
+- **Documentation**: [docs/](docs/)
+
+## Acknowledgments
+
+- **Haystack**: For the modular pipeline architecture
+- **FastAPI**: For the high-performance API framework
+- **Milvus**: For vector database capabilities
+- **Transformers**: For local AI model processing
