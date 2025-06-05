@@ -13,6 +13,17 @@ try:
 except ImportError: 
     from contract_engine.contract_pipeline import create_product_selection_pipeline
 
+try:
+    from websearch_pipeline.websearch_pipeline import create_websearch_pipeline
+    WEBSEARCH_AVAILABLE = True
+    logging.getLogger(__name__).info("WebSearch pipeline imported successfully.")
+except ImportError:
+    logging.getLogger(__name__).warning("Failed to import WebSearch pipeline. WebSearch functionality will be disabled.")
+    WEBSEARCH_AVAILABLE = False
+    def create_websearch_pipeline():
+        """Dummy function to handle WebSearch unavailability."""
+        return None
+
 # Import RAG function
 try:
     from haystack_pipeline import ask_doc as ask_document_pipeline
@@ -48,6 +59,18 @@ try:
 except Exception as e:
     logger.error("Failed to initialize Product Selection Pipeline: %s", e, exc_info=True)
     PRODUCT_SELECTION_PIPELINE = None
+
+# Initialize WebSearch Pipeline
+try:
+    if WEBSEARCH_AVAILABLE:
+        WEBSEARCH_PIPELINE = create_websearch_pipeline()
+        logger.info("WebSearch Pipeline initialized successfully.")
+    else:
+        WEBSEARCH_PIPELINE = None
+        logger.info("WebSearch Pipeline not available due to import failure.")
+except Exception as e:
+    logger.error("Failed to initialize WebSearch Pipeline: %s", e, exc_info=True)
+    WEBSEARCH_PIPELINE = None
 
 class Message(BaseModel): 
     role: str
@@ -104,12 +127,15 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         session_store.save_session(session_id)
         return {"reply": reply_content, "session_id": session_id}
 
-    # 2. If no pending confirmation, proceed with routing: Contract, RAG, or Chat
+    # 2. If no pending confirmation, proceed with routing: Contract, RAG, WebSearch, or Chat
     contract_keywords = r"\b(buy|purchase|order|acquire|get me|shop for|find a|buy an)\b"
     is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
     
     rag_trigger_keyword = "#rag" # Note: conceptual code had "#rag " (with space), this is more flexible
     is_rag_intent = bool(last_user_message_content.lower().startswith(rag_trigger_keyword))
+    
+    websearch_keywords = r"\b(today|latest|new|current|recent|2025|2024|now|who are|what is|when did|ministers|government|breaking|news)\b"
+    is_websearch_intent = bool(WEBSEARCH_PIPELINE and re.search(websearch_keywords, last_user_message_content, re.IGNORECASE))
 
     if is_contract_intent:
         logger.info("Contract path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
@@ -131,6 +157,27 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         except Exception as e:
             logger.error("Error running ProductSelectionPipeline for session %s: %s", session_id, e, exc_info=True)
             reply_content = "Sorry, there was an error trying to find products for you."
+    
+    elif is_websearch_intent and WEBSEARCH_PIPELINE: # WebSearch Path
+        logger.info("WebSearch path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
+        try:
+            pipeline_result = WEBSEARCH_PIPELINE.run(query=last_user_message_content)
+            summarizer_output = pipeline_result.get("LLMSummarizer", ({}, ''))
+            summary_data = summarizer_output[0] if isinstance(summarizer_output, tuple) else {}
+            
+            summary = summary_data.get("summary", "No current information found.")
+            sources = summary_data.get("sources", [])
+            
+            reply_content = summary
+            
+            if sources and len(sources) > 0:
+                reply_content += f"\n\nSources: {', '.join(sources[:3])}"
+                
+            logger.info("WebSearch pipeline returned for session %s: '%s...'", session_id, reply_content[:100])
+            
+        except Exception as e:
+            logger.error("Error running WebSearch Pipeline for session %s: %s", session_id, e, exc_info=True)
+            reply_content = "Sorry, there was an error searching for current information."
     
     elif is_rag_intent: # RAG Path
         logger.info("RAG path for session %s. Input: '%s'", session_id, last_user_message_content)
