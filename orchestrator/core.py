@@ -66,7 +66,6 @@ except Exception as e:
     logger.error("Failed to initialize Product Selection Pipeline: %s", e, exc_info=True)
     PRODUCT_SELECTION_PIPELINE = None
 
-<<<<<<< HEAD
 # Initialize WebSearch Pipeline
 try:
     if WEBSEARCH_AVAILABLE:
@@ -79,8 +78,6 @@ except Exception as e:
     logger.error("Failed to initialize WebSearch Pipeline: %s", e, exc_info=True)
     WEBSEARCH_PIPELINE = None
 
-||||||| 9b995b5
-=======
 # Initialize new pipeline architecture
 try:
     if create_product_search_pipeline and create_preference_match_pipeline:
@@ -95,8 +92,6 @@ except Exception as e:
     logger.error("Failed to initialize new pipeline architecture: %s", e, exc_info=True)
     PRODUCT_SEARCH_PIPELINE = None
     PREFERENCE_MATCH_PIPELINE = None
-
->>>>>>> origin/main
 class Message(BaseModel): 
     role: str
     content: str
@@ -170,35 +165,10 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         session_store.save_session(session_id)
         return {"reply": reply_content, "session_id": session_id}
 
-<<<<<<< HEAD
-    # 2. If no pending confirmation, proceed with routing: Contract, RAG, WebSearch, or Chat
-    contract_keywords = r"\b(buy|purchase|order|acquire|get me|shop for|find a|buy an)\b"
-    is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
-    
-    rag_trigger_keyword = "#rag" # Note: conceptual code had "#rag " (with space), this is more flexible
-    is_rag_intent = bool(last_user_message_content.lower().startswith(rag_trigger_keyword))
-    
-    websearch_keywords = r"\b(today|latest|new|current|recent|2025|2024|now|who are|what is|when did|ministers|government|breaking|news)\b"
-    is_websearch_intent = bool(WEBSEARCH_PIPELINE and re.search(websearch_keywords, last_user_message_content, re.IGNORECASE))
-
-    if is_contract_intent:
-        logger.info("Contract path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
-||||||| 9b995b5
-    # 2. If no pending confirmation, proceed with routing: Contract, RAG, or Chat
-    contract_keywords = r"\b(buy|purchase|order|acquire|get me|shop for|find a|buy an)\b"
-    is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
-    
-    rag_trigger_keyword = "#rag" # Note: conceptual code had "#rag " (with space), this is more flexible
-    is_rag_intent = bool(last_user_message_content.lower().startswith(rag_trigger_keyword))
-
-    if is_contract_intent:
-        logger.info("Contract path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
-=======
     stored_fsm = session_store.get_contract_fsm(session_id)
     if stored_fsm:
         logger.info("🔄 FSM continuation: Retrieved stored FSM for session %s with user input: '%s'", session_id, last_user_message_content)
         logger.info("🔄 FSM continuation: Current state before processing: %s", stored_fsm.context.current_state if hasattr(stored_fsm, 'context') else 'unknown')
->>>>>>> origin/main
         try:
             result = stored_fsm.next(last_user_message_content)
             logger.info("🔄 FSM continuation: Processing completed", extra={
@@ -267,6 +237,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
         rag_trigger_keyword = "#rag"
         is_rag_intent = bool(last_user_message_content.lower().startswith(rag_trigger_keyword))
+        websearch_keywords = r"\b(today|latest|new|current|recent|2025|2024|now|who are|what is|when did|ministers|government|breaking|news)\b"
+        is_websearch_intent = bool(WEBSEARCH_PIPELINE and re.search(websearch_keywords, last_user_message_content, re.IGNORECASE))
         
         if is_contract_intent:
             intent_type = "contract"
@@ -274,6 +246,9 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         elif is_rag_intent:
             intent_type = "rag"
             parameters = {"rag_question": last_user_message_content[len(rag_trigger_keyword):].lstrip()}
+        elif is_websearch_intent:
+            intent_type = "websearch"
+            parameters = {"websearch_query": last_user_message_content}
         else:
             intent_type = "chat"
             parameters = {}
@@ -353,38 +328,33 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         else:
             reply_content = f"Contract template {contract_template} is not yet supported."
     
-<<<<<<< HEAD
-    elif is_websearch_intent and WEBSEARCH_PIPELINE: # WebSearch Path
-        logger.info("WebSearch path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
-        try:
-            pipeline_result = WEBSEARCH_PIPELINE.run(query=last_user_message_content)
-            summarizer_output = pipeline_result.get("LLMSummarizer", ({}, ''))
-            summary_data = summarizer_output[0] if isinstance(summarizer_output, tuple) else {}
-            
-            summary = summary_data.get("summary", "No current information found.")
-            sources = summary_data.get("sources", [])
-            
-            reply_content = summary
-            
-            if sources and len(sources) > 0:
-                reply_content += f"\n\nSources: {', '.join(sources[:3])}"
+    elif intent_type == "websearch":
+        # WebSearch Path - integrate with LLM intent extraction
+        logger.info("🔍 WebSearch path triggered", extra={"session_id": session_id, "websearch_query": last_user_message_content})
+        if WEBSEARCH_PIPELINE:
+            try:
+                pipeline_result = WEBSEARCH_PIPELINE.run(query=last_user_message_content)
+                summarizer_output = pipeline_result.get("LLMSummarizer", ({}, ''))
+                summary_data = summarizer_output[0] if isinstance(summarizer_output, tuple) else {}
                 
-            logger.info("WebSearch pipeline returned for session %s: '%s...'", session_id, reply_content[:100])
-            
-        except Exception as e:
-            logger.error("Error running WebSearch Pipeline for session %s: %s", session_id, e, exc_info=True)
-            reply_content = "Sorry, there was an error searching for current information."
+                summary = summary_data.get("summary", "No current information found.")
+                sources = summary_data.get("sources", [])
+                
+                reply_content = summary
+                
+                if sources and len(sources) > 0:
+                    reply_content += f"\n\nSources: {', '.join(sources[:3])}"
+                    
+                logger.info("🔍 WebSearch response generated", extra={"session_id": session_id, "response_preview": reply_content[:100]})
+                
+            except Exception as e:
+                logger.error("Error running WebSearch Pipeline for session %s: %s", session_id, e, exc_info=True)
+                reply_content = "Sorry, there was an error searching for current information."
+        else:
+            reply_content = "WebSearch functionality is currently unavailable."
     
-    elif is_rag_intent: # RAG Path
-        logger.info("RAG path for session %s. Input: '%s'", session_id, last_user_message_content)
-        question_for_rag = last_user_message_content[len(rag_trigger_keyword):].lstrip()
-||||||| 9b995b5
-    elif is_rag_intent: # RAG Path
-        logger.info("RAG path for session %s. Input: '%s'", session_id, last_user_message_content)
-        question_for_rag = last_user_message_content[len(rag_trigger_keyword):].lstrip()
-=======
     elif intent_type == "tool_usage":
-        logger.info("Tool usage path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
+        logger.info("🔧 Tool usage path triggered", extra={"session_id": session_id, "user_input": last_user_message_content})
         tools_needed = parameters.get("tools_needed", [])
         if not isinstance(tools_needed, list):
             tools_needed = [tools_needed] if tools_needed else []
@@ -397,7 +367,6 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
     elif intent_type == "rag":
         logger.info("📚 RAG path triggered", extra={"session_id": session_id, "rag_question": last_user_message_content})
         question_for_rag = parameters.get("rag_question", "")
->>>>>>> origin/main
         
         if not question_for_rag:
             reply_content = "Please provide a question after the #rag trigger."
