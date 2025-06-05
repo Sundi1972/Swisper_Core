@@ -122,7 +122,16 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         return {"reply": "No messages provided to orchestrator.", "session_id": session_id}
 
     last_user_message_pydantic = messages[-1] 
-    last_user_message_content = last_user_message_pydantic.content
+    logger.info(f"🔍 DEBUG: messages[-1] = {messages[-1]}")
+    if isinstance(last_user_message_pydantic, str):
+        last_user_message_content = last_user_message_pydantic
+        last_user_message_pydantic = Message(role="user", content=last_user_message_pydantic)
+    elif isinstance(last_user_message_pydantic, dict):
+        last_user_message_content = last_user_message_pydantic.get("content", "")
+        last_user_message_pydantic = Message(role=last_user_message_pydantic.get("role", "user"), content=last_user_message_content)
+    else:
+        last_user_message_content = last_user_message_pydantic.content
+    logger.info(f"🔍 DEBUG: last_user_message_content = '{last_user_message_content}'")
     
     session_store.add_chat_message(session_id, last_user_message_pydantic.dict())
 
@@ -216,6 +225,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         intent_type = intent_data.get("intent_type")
         parameters = intent_data.get("parameters", {})
         
+        logger.info(f"🔍 DEBUG: Raw intent_data = {intent_data}")
+        
         logger.info("🎯 User intent extracted", extra={
             "session_id": session_id,
             "user_input": last_user_message_content,
@@ -223,6 +234,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
             "confidence": intent_data.get("confidence", 0.0),
             "reasoning": intent_data.get("reasoning", "")
         })
+        
+        logger.info(f"🔍 DEBUG: intent_type = '{intent_type}', parameters = {parameters}")
         
         if intent_type == "contract":
             contract_template = parameters.get("contract_template")
@@ -240,15 +253,23 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         websearch_keywords = r"\b(today|latest|new|current|recent|2025|2024|now|who are|what is|when did|ministers|government|breaking|news)\b"
         is_websearch_intent = bool(WEBSEARCH_PIPELINE and re.search(websearch_keywords, last_user_message_content, re.IGNORECASE))
         
-        if is_contract_intent:
+        logger.info("🔍 Fallback intent detection", extra={
+            "session_id": session_id,
+            "is_contract": is_contract_intent,
+            "is_rag": is_rag_intent, 
+            "is_websearch": is_websearch_intent,
+            "websearch_available": WEBSEARCH_PIPELINE is not None
+        })
+        
+        if is_websearch_intent:
+            intent_type = "websearch"
+            parameters = {"websearch_query": last_user_message_content}
+        elif is_contract_intent:
             intent_type = "contract"
             parameters = {"contract_template": "purchase_item.yaml", "extracted_query": last_user_message_content}
         elif is_rag_intent:
             intent_type = "rag"
             parameters = {"rag_question": last_user_message_content[len(rag_trigger_keyword):].lstrip()}
-        elif is_websearch_intent:
-            intent_type = "websearch"
-            parameters = {"websearch_query": last_user_message_content}
         else:
             intent_type = "chat"
             parameters = {}
@@ -334,11 +355,15 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         if WEBSEARCH_PIPELINE:
             try:
                 pipeline_result = WEBSEARCH_PIPELINE.run(query=last_user_message_content)
-                summarizer_output = pipeline_result.get("LLMSummarizer", ({}, ''))
-                summary_data = summarizer_output[0] if isinstance(summarizer_output, tuple) else {}
+                logger.info(f"🔍 DEBUG: pipeline_result type = {type(pipeline_result)}")
+                logger.info(f"🔍 DEBUG: pipeline_result keys = {list(pipeline_result.keys()) if isinstance(pipeline_result, dict) else 'not_dict'}")
+                logger.info(f"🔍 DEBUG: pipeline_result = {pipeline_result}")
                 
-                summary = summary_data.get("summary", "No current information found.")
-                sources = summary_data.get("sources", [])
+                summary = pipeline_result.get("summary", "No current information found.")
+                sources = pipeline_result.get("sources", [])
+                
+                logger.info(f"🔍 DEBUG: extracted summary = '{summary}'")
+                logger.info(f"🔍 DEBUG: extracted sources = {sources}")
                 
                 reply_content = summary
                 
