@@ -195,7 +195,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         parameters = intent_data.get("parameters", {})
         
         logger.info("🎯 User intent extracted", extra={
-            "session_id": session_id, 
+            "session_id": session_id,
+            "user_input": last_user_message_content,
             "intent": intent_type, 
             "confidence": intent_data.get("confidence", 0.0),
             "reasoning": intent_data.get("reasoning", "")

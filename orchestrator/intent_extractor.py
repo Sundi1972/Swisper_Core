@@ -40,42 +40,156 @@ def load_available_tools() -> Dict[str, Any]:
         return tools_data.get("tools", {})
     except Exception as e:
         logger.error(f"Failed to load MCP tools: {e}")
-        return {}
+        return {
+            "search_products": {
+                "description": "Search for products using SearchAPI.io with fallback to mock data",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Product search query"}
+                    },
+                    "required": ["query"]
+                }
+            },
+            "analyze_product_attributes": {
+                "description": "Analyze products to extract key differentiating attributes",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "products": {"type": "array", "description": "List of product objects"},
+                        "product_type": {"type": "string", "description": "Product category"}
+                    },
+                    "required": ["products"]
+                }
+            },
+            "check_compatibility": {
+                "description": "Check product compatibility against user constraints",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "products": {"type": "array", "description": "List of products"},
+                        "constraints": {"type": "object", "description": "User constraints"},
+                        "product_type": {"type": "string", "description": "Product category"}
+                    },
+                    "required": ["products", "constraints"]
+                }
+            },
+            "filter_products_by_preferences": {
+                "description": "Filter products based on user preferences",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "products": {"type": "array", "description": "List of products"},
+                        "preferences": {"type": "array", "description": "User preferences"}
+                    },
+                    "required": ["products", "preferences"]
+                }
+            }
+        }
 
-def extract_user_intent(user_message: str) -> Dict[str, Any]:
-    """Extract user intent using LLM with fallback to regex"""
+def _generate_routing_manifest() -> Dict[str, Any]:
+    """Generate routing manifest with available contracts, tools, and intent types"""
     
     contracts = load_available_contracts()
     tools = load_available_tools()
     
-    system_prompt = f"""You are an intent classifier for the Swisper AI assistant. Analyze user messages and classify their intent.
+    contract_options = []
+    for filename, contract_info in contracts.items():
+        contract_name = contract_info.get("type", filename.replace(".yaml", ""))
+        description = contract_info.get("description", f"Execute {contract_name} workflow")
+        
+        trigger_keywords = []
+        if contract_name == "purchase_item":
+            trigger_keywords = ["buy", "purchase", "order", "acquire", "shop for", "find to buy", "want to buy", "looking for", "need to buy"]
+        
+        contract_options.append({
+            "name": contract_name,
+            "template": filename,
+            "description": description,
+            "trigger_keywords": trigger_keywords
+        })
+    
+    tool_names = list(tools.keys())
+    
+    routing_manifest = {
+        "routing_options": [
+            {
+                "intent_type": "chat",
+                "description": "General open-ended conversation"
+            },
+            {
+                "intent_type": "rag", 
+                "description": "Ask questions about uploaded or stored documents (prefix with #rag)"
+            },
+            {
+                "intent_type": "tool_usage",
+                "description": "Use tools for analysis, comparison, or information gathering",
+                "tools": tool_names
+            },
+            {
+                "intent_type": "contract",
+                "description": "Execute structured workflows with specific business logic",
+                "contracts": contract_options
+            }
+        ]
+    }
+    
+    return routing_manifest
 
-Available Contract Templates:
-{json.dumps(contracts, indent=2)}
+def extract_user_intent(user_message: str) -> Dict[str, Any]:
+    """Extract user intent using contract-aware routing with dedicated LLM classification"""
+    
+    routing_manifest = _generate_routing_manifest()
+    
+    try:
+        intent_result = _classify_intent_with_llm(user_message, routing_manifest)
+        
+        confidence = intent_result.get("confidence", 0.0)
+        if confidence < 0.6:
+            logger.warning(f"Low confidence {confidence}, falling back to chat")
+            return _create_chat_fallback(user_message, f"Low confidence classification: {confidence}")
+        
+        logger.info(f"Intent classified as '{intent_result['intent_type']}' with confidence {confidence}")
+        logger.info(f"Reasoning: {intent_result.get('reasoning', 'No reasoning provided')}")
+        
+        return intent_result
+        
+    except Exception as e:
+        logger.error(f"Intent classification failed: {e}")
+        return _create_chat_fallback(user_message, f"Classification error: {str(e)}")
 
-Available Tools:
-{json.dumps(tools, indent=2)}
+def _classify_intent_with_llm(user_message: str, routing_manifest: Dict[str, Any]) -> Dict[str, Any]:
+    """Use dedicated LLM to classify intent based on routing manifest"""
+    
+    system_prompt = f"""You are a routing assistant for an intelligent agent platform. Given a user message and a list of available intents, choose the most appropriate one and justify your decision.
 
-Classify the user's intent into one of these types:
-1. "contract" - User wants to execute a structured workflow (e.g., purchase, booking)
-2. "rag" - User wants to ask questions about documents (starts with #rag)
-3. "tool_usage" - User needs tools but no structured workflow exists
-4. "chat" - General conversation
+AVAILABLE ROUTING OPTIONS:
+{json.dumps(routing_manifest, indent=2)}
+
+CLASSIFICATION RULES:
+1. For purchase-related requests (buy, purchase, order, acquire, shop for), use "contract" intent with purchase_item template
+2. For document questions starting with "#rag", use "rag" intent
+3. For analysis, comparison, or tool-based tasks, use "tool_usage" intent
+4. For general conversation, use "chat" intent
+
+CONFIDENCE SCORING:
+- 0.9-1.0: Very clear intent match with strong keywords
+- 0.7-0.9: Good intent match with supporting context
+- 0.5-0.7: Reasonable intent match but some ambiguity
+- 0.0-0.5: Unclear or ambiguous intent
 
 Respond with JSON in this exact format:
 {{
   "intent_type": "contract|rag|tool_usage|chat",
   "confidence": 0.0-1.0,
-  "parameters": {{
-    "contract_template": "filename.yaml or null",
-    "tools_needed": ["tool1", "tool2"] or [],
-    "extracted_query": "enhanced search query",
-    "rag_question": "document question or null"
-  }},
-  "reasoning": "brief explanation"
+  "contract_template": "filename.yaml or null",
+  "tools_needed": ["tool1", "tool2"] or [],
+  "extracted_query": "enhanced search query or original message",
+  "rag_question": "document question or null",
+  "reasoning": "detailed explanation of classification decision including matched keywords and context"
 }}
 
-Be confident in your classifications. Use high confidence (>0.8) for clear intents."""
+IMPORTANT: Be conservative with confidence scores. Only use high confidence (>0.8) when intent is very clear."""
 
     user_prompt = f"User message: {user_message}"
     
@@ -86,71 +200,68 @@ Be confident in your classifications. Use high confidence (>0.8) for clear inten
             {"role": "user", "content": user_prompt}
         ])
         
-        intent_data = json.loads(response)
+        logger.info(f"LLM raw response: {response}")
         
-        confidence = intent_data.get("confidence", 0.0)
-        if confidence < 0.85:
-            logger.info(f"LLM confidence {confidence} below threshold, using fallback")
-            return _fallback_intent_extraction(user_message)
+        if not response or not response.strip():
+            raise ValueError("Empty LLM response")
+        
+        cleaned_response = response.strip()
+        if cleaned_response.startswith('```json'):
+            cleaned_response = cleaned_response[7:]  # Remove ```json
+        if cleaned_response.startswith('```'):
+            cleaned_response = cleaned_response[3:]   # Remove ```
+        if cleaned_response.endswith('```'):
+            cleaned_response = cleaned_response[:-3]  # Remove trailing ```
+        cleaned_response = cleaned_response.strip()
+        
+        logger.info(f"Cleaned response: {cleaned_response}")
             
+        intent_data = json.loads(cleaned_response)
+        
+        required_fields = ["intent_type", "confidence", "reasoning"]
+        for field in required_fields:
+            if field not in intent_data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        if "contract_template" not in intent_data:
+            intent_data["contract_template"] = None
+        if "tools_needed" not in intent_data:
+            intent_data["tools_needed"] = []
+        if "extracted_query" not in intent_data:
+            intent_data["extracted_query"] = user_message
+        if "rag_question" not in intent_data:
+            intent_data["rag_question"] = None
+            
+        intent_data["parameters"] = {
+            "contract_template": intent_data["contract_template"],
+            "tools_needed": intent_data["tools_needed"],
+            "extracted_query": intent_data["extracted_query"],
+            "rag_question": intent_data["rag_question"]
+        }
+        
         return intent_data
         
     except Exception as e:
-        logger.error(f"LLM intent extraction failed: {e}")
-        return _fallback_intent_extraction(user_message)
+        logger.error(f"LLM classification error: {e}")
+        logger.error(f"Raw response was: {response if 'response' in locals() else 'No response'}")
+        raise
 
-def _fallback_intent_extraction(user_message: str) -> Dict[str, Any]:
-    """Fallback regex-based intent extraction"""
-    
-    if user_message.lower().startswith("#rag"):
-        return {
-            "intent_type": "rag",
-            "confidence": 1.0,
-            "parameters": {
-                "contract_template": None,
-                "tools_needed": [],
-                "extracted_query": "",
-                "rag_question": user_message[4:].strip()
-            },
-            "reasoning": "RAG prefix detected"
-        }
-    
-    contract_keywords = r"\b(buy|purchase|order|acquire|get me|shop for|find a|buy an)\b"
-    if re.search(contract_keywords, user_message, re.IGNORECASE):
-        return {
-            "intent_type": "contract",
-            "confidence": 0.9,
-            "parameters": {
-                "contract_template": "purchase_item.yaml",
-                "tools_needed": [],
-                "extracted_query": user_message,
-                "rag_question": None
-            },
-            "reasoning": "Purchase keywords detected"
-        }
-    
-    tool_keywords = r"\b(compare|check|compatibility|compatible|specifications|specs|analyze|filter)\b"
-    if re.search(tool_keywords, user_message, re.IGNORECASE):
-        return {
-            "intent_type": "tool_usage",
-            "confidence": 0.8,
-            "parameters": {
-                "contract_template": None,
-                "tools_needed": ["search_products", "analyze_product_attributes"],
-                "extracted_query": user_message,
-                "rag_question": None
-            },
-            "reasoning": "Tool usage keywords detected"
-        }
+def _create_chat_fallback(user_message: str, reason: str) -> Dict[str, Any]:
+    """Create chat intent fallback for low confidence or error cases"""
     
     return {
         "intent_type": "chat",
-        "confidence": 0.8,
+        "confidence": 0.5,
+        "contract_template": None,
+        "tools_needed": [],
+        "extracted_query": user_message,
+        "rag_question": None,
         "parameters": {
             "contract_template": None,
             "tools_needed": [],
-            "extracted_query": "",
+            "extracted_query": user_message,
             "rag_question": None
         },
-        "reasoning": "No specific intent detected"
+        "reasoning": f"Fallback to chat: {reason}",
+        "fallback_reason": reason
     }
