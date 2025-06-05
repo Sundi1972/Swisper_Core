@@ -4,35 +4,133 @@
 
 Swisper Core implements a clean separation between the **Finite State Machine (FSM)** as a control plane and **Haystack Pipelines** as a data plane, providing a robust and scalable AI assistant architecture.
 
+### High-Level Architecture Diagram
+
+```plantuml
+@startuml Swisper_Architecture
+
+top to bottom direction
+skinparam rectangle {
+  FontSize 12
+  BorderColor black
+}
+
+' ------------------ CLIENT LAYER ------------------
+rectangle "Client Layer" {
+  rectangle "AI Assistant App (React UI)\nTailwind CSS" as UI
+  rectangle "Biometric Auth\n(iOS/Android Secure Enclave)" as Biometric
+  rectangle "Voice Input\n(Web Speech API)" as VoiceIn
+  rectangle "Text-to-Speech\n(Web Synthesis)" as TTS
+  rectangle "Memory Cache\n(LocalStorage, IndexedDB)" as Cache
+  rectangle "Local Policy Engine\n(JS Policy Evaluator)" as LocalPolicy
+  rectangle "Device Integration\n(Camera, Mic, Contacts)" as DeviceIO
+}
+
+' ------------------ GATEWAY LAYER ------------------
+rectangle "Secure Gateway API" {
+  rectangle "API Gateway\n(FastAPI, HTTPS)" as Gateway
+  rectangle "JWT Validator\n(PyJWT)" as JWT
+  rectangle "Intent Router\n(Intent Classifier)" as Router
+}
+
+' ------------------ ORCHESTRATION LAYER ------------------
+rectangle "AI Assistant Core (Orchestration)" {
+  rectangle "LLM Orchestrator\n(OpenAI GPT-4o)" as Orchestrator
+  rectangle "Tool Registry\n(JSON Schemas)" as Registry
+  rectangle "Contract Engine\n(YAML + JSONSchema)" as Contract
+  rectangle "Tool Proxies\n(Google Shopping, Outlook)" as Proxies
+  rectangle "Voice Transcriber\n(Whisper, Deepgram)" as Transcriber
+  rectangle "Voice Synthesizer\n(ElevenLabs, Google TTS)" as Synthesizer
+}
+
+' ------------------ TRUST & POLICY ------------------
+rectangle "Trust & Policy Layer" {
+  rectangle "Consent Manager\n(User Consent Logs)" as Consent
+  rectangle "Execution Policy Engine\n(Rule Evaluator)" as Policy
+  rectangle "Sensitive Action Approval\n(User/Admin Prompt)" as Approval
+}
+
+' ------------------ INFRASTRUCTURE ------------------
+rectangle "Infrastructure & Dev Tools" {
+  rectangle "Onboarding Console\n(Tool Registration)" as Onboard
+  rectangle "Analytics Engine\n(OpenTelemetry, Mixpanel)" as Analytics
+  rectangle "AI Debug Toolkit\n(Trace, Replay)" as Debugger
+}
+
+' ------------------ CONNECTIONS ------------------
+User --> UI
+UI --> VoiceIn
+UI --> TTS
+UI --> Biometric
+UI --> Cache
+UI --> LocalPolicy
+UI --> DeviceIO
+UI --> Gateway
+
+Gateway --> JWT
+Gateway --> Router
+Router --> Orchestrator
+Router --> Contract
+
+Orchestrator --> Registry
+Orchestrator --> Proxies
+Orchestrator --> Consent
+Orchestrator --> Policy
+Orchestrator --> Approval
+Orchestrator --> Transcriber
+Orchestrator --> Synthesizer
+
+Contract --> Proxies
+Proxies --> Approval
+
+Gateway --> Onboard
+Gateway --> Analytics
+Gateway --> Debugger
+
+@enduml
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Client Layer                             │
-├─────────────────────────────────────────────────────────────────┤
-│  AI Assistant App (React UI) │ Biometric Auth │ Voice I/O       │
-│  Tailwind CSS                │ Secure Enclave │ Speech API      │
-│  Memory Cache (LocalStorage) │ Local Policy   │ Device Integration│
-└─────────────────────────────────────────────────────────────────┘
-                                    │
-┌─────────────────────────────────────────────────────────────────┐
-│                     Secure Gateway API                         │
-├─────────────────────────────────────────────────────────────────┤
-│  API Gateway (FastAPI)       │ JWT Validator  │ Intent Router   │
-│  HTTPS Security              │ Authentication │ Request Routing │
-└─────────────────────────────────────────────────────────────────┘
-                                    │
-┌─────────────────────────────────────────────────────────────────┐
-│                AI Assistant Core (Orchestration)               │
-├─────────────────────────────────────────────────────────────────┤
-│  LLM Orchestrator (GPT-4o)   │ Tool Registry  │ Contract Engine │
-│  Tool Proxies (Shopping)     │ Voice Services │ Pipeline Manager│
-└─────────────────────────────────────────────────────────────────┘
-                                    │
-┌─────────────────────────────────────────────────────────────────┐
-│                    Trust & Policy Layer                        │
-├─────────────────────────────────────────────────────────────────┤
-│  Consent Manager             │ Policy Engine  │ Action Approval │
-│  User Consent Logs           │ Rule Evaluator │ Admin Prompts   │
-└─────────────────────────────────────────────────────────────────┘
+
+### Memory Management Sequence
+
+```plantuml
+@startuml Memory_Management_Sequence
+title Memory Use in User Interaction
+
+actor User
+participant "AI Assistant App (Client)" as Client
+participant "API Gateway" as Gateway
+participant "Prompt Preprocessor" as Preprocessor
+participant "Memory Store" as Memory
+participant "Contract Engine" as Contract
+participant "LLM Orchestrator" as LLM
+
+== New Prompt Submitted ==
+
+User -> Client : Sends prompt
+Client -> Gateway : POST /prompt
+
+Gateway -> Preprocessor : Analyze input
+Preprocessor -> Memory : Retrieve session memory
+Memory --> Preprocessor : Relevant facts, prior tasks
+
+Preprocessor -> Contract : Update or launch contract flow?
+alt Structured flow
+    Contract -> Memory : Load contract state
+    Contract -> LLM : Get response using memory + rules
+    LLM --> Contract : Reply
+    Contract -> Memory : Persist updated state
+    Contract --> Gateway : Response
+else Freeform prompt
+    Preprocessor -> LLM : Construct prompt + inject memory
+    LLM --> Preprocessor : Response
+    Preprocessor -> Memory : Optionally persist summary
+    Preprocessor --> Gateway : Response
+end
+
+Gateway --> Client : Render assistant reply
+Client --> User : Assistant response shown
+
+@enduml
 ```
 
 ## Core Architecture Principles

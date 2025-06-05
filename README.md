@@ -148,8 +148,7 @@ Swisper_Core/
 ├── frontend/                 # React application
 ├── frontend-template/        # Reusable frontend template
 ├── tests/                    # Comprehensive test suite
-├── docs/                     # Documentation
-└── Architecture/             # PlantUML diagrams
+└── docs/                     # Documentation
 ```
 
 ### Code Quality
