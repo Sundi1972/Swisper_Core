@@ -15,7 +15,7 @@ def test_complete_washing_machine_flow():
     
     print("🧪 Testing complete washing machine contract flow...")
     
-    fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
     fsm.fill_parameters({
         "product": "washing machine", 
         "session_id": "test_washing_machine_integration"

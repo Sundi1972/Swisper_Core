@@ -119,7 +119,8 @@ Main FSM class for managing contract flow.
 from contract_engine.contract_engine import ContractStateMachine
 from swisper_core import SwisperContext
 
-fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+import os
+fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
 fsm.context = SwisperContext(
     session_id="session_123",
     product_query="gaming laptop",
@@ -387,7 +388,8 @@ from contract_engine.pipelines.product_search_pipeline import create_product_sea
 from contract_engine.pipelines.preference_match_pipeline import create_preference_match_pipeline
 
 # Initialize FSM with pipelines
-fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+import os
+fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
 fsm.product_search_pipeline = create_product_search_pipeline()
 fsm.preference_match_pipeline = create_preference_match_pipeline()
 

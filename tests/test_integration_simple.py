@@ -95,7 +95,8 @@ class TestSimpleIntegration:
         """Test that FSM and Pipeline separation is maintained"""
         from contract_engine.contract_engine import ContractStateMachine
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         assert fsm is not None
         
         search_pipeline = create_product_search_pipeline()

@@ -5,6 +5,7 @@ Tests the integration between FSM state handlers and the preference match pipeli
 """
 import pytest
 import asyncio
+import os
 from unittest.mock import patch, MagicMock, AsyncMock
 from contract_engine.contract_engine import ContractStateMachine
 from contract_engine.state_transitions import ContractState, StateTransition
@@ -13,7 +14,7 @@ from contract_engine.state_transitions import ContractState, StateTransition
 class TestFSMPreferenceIntegration:
     def test_fsm_initializes_with_preference_pipeline(self):
         """Test that FSM initializes with preference match pipeline"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         
         assert hasattr(fsm, 'preference_match_pipeline')
         assert fsm.preference_match_pipeline is not None
@@ -35,7 +36,7 @@ class TestFSMPreferenceIntegration:
         
         mock_run_preference.side_effect = async_mock_return
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "test product", "session_id": "test"})
         fsm.context.search_results = [
             {"name": "Product A", "price": "100 CHF"},
@@ -68,7 +69,7 @@ class TestFSMPreferenceIntegration:
         
         mock_run_preference.side_effect = async_mock_return
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "nonexistent product", "session_id": "test"})
         fsm.context.search_results = [{"name": "Product A", "price": "100 CHF"}]
         fsm.context.preferences = {"budget": "under 50 CHF"}
@@ -86,7 +87,7 @@ class TestFSMPreferenceIntegration:
         
         mock_run_preference.side_effect = async_mock_error
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "test product", "session_id": "test"})
         fsm.context.search_results = [{"name": "Product A", "price": "100 CHF"}]
         fsm.context.preferences = {"budget": "under 200 CHF"}
@@ -98,7 +99,7 @@ class TestFSMPreferenceIntegration:
     
     def test_handle_match_preferences_state_no_search_results(self):
         """Test preference matching when no search results available"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "test product", "session_id": "test"})
         fsm.context.search_results = []
         fsm.context.preferences = {"budget": "under 200 CHF"}
@@ -136,7 +137,7 @@ class TestFSMPreferenceIntegration:
             }
         }
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "test product", "session_id": "test"})
         fsm.context.search_results = [
             {"name": "Product A", "price": "100 CHF"},
@@ -167,7 +168,7 @@ class TestFSMPreferenceIntegration:
         
         mock_run_preference.side_effect = async_mock_return
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "test product", "session_id": "test"})
         fsm.context.search_results = [{"name": "Product A", "price": "100 CHF"}]
         fsm.context.preferences = {"budget": "under 200 CHF"}
@@ -183,7 +184,7 @@ class TestFSMPreferenceIntegration:
     
     def test_wait_for_preferences_transitions_to_match_preferences(self):
         """Test that wait_for_preferences state transitions to match_preferences"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "laptop", "session_id": "test"})
         fsm.context.search_results = [{"name": "Laptop A", "price": "1000 CHF"}]
         
@@ -195,7 +196,7 @@ class TestFSMPreferenceIntegration:
     
     def test_async_preference_handler_integration_in_next_method(self):
         """Test that the next() method properly handles async preference state handlers"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "test", "session_id": "test"})
         fsm.context.search_results = [{"name": "Product A", "price": "100 CHF"}]
         fsm.context.preferences = {"budget": "under 200 CHF"}
@@ -234,7 +235,7 @@ class TestFSMPreferenceIntegration:
         
         mock_run_preference.side_effect = async_mock_return
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "laptop", "session_id": "test"})
         fsm.context.search_results = [
             {"name": "Laptop Pro", "price": "1200 CHF"},
@@ -255,7 +256,7 @@ class TestFSMPreferenceIntegration:
     
     def test_preference_pipeline_with_empty_preferences(self):
         """Test preference matching with empty preferences"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "test product", "session_id": "test"})
         fsm.context.search_results = [{"name": "Product A", "price": "100 CHF"}]
         fsm.context.preferences = {}

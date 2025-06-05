@@ -1,16 +1,17 @@
 import pytest
+import os
 from unittest.mock import patch, MagicMock
 from contract_engine.contract_engine import ContractStateMachine
 from swisper_core import SwisperContext
 
 class TestFSMIntegration:
     def test_fsm_initialization(self):
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         assert fsm.context.current_state == "start"
         assert fsm.contract is not None
 
     def test_fsm_parameter_filling(self):
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({
             "product": "GPU RTX 4090",
             "session_id": "test_session"
@@ -26,7 +27,7 @@ class TestFSMIntegration:
             "attributes": ["brand", "price"]
         }
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "RTX 4090", "session_id": "test"})
         
         result = fsm.next()
@@ -35,7 +36,7 @@ class TestFSMIntegration:
         assert fsm.context.current_state in ["present_options", "confirm_purchase", "confirm_selection", "confirm_order", "completed"]
 
     def test_fsm_state_transitions(self):
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         initial_state = fsm.context.current_state
         
         fsm.fill_parameters({"product": "test", "session_id": "test"})
@@ -44,7 +45,7 @@ class TestFSMIntegration:
         assert fsm.context.current_state != initial_state
 
     def test_context_serialization(self):
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({
             "product": "GPU RTX 4090",
             "session_id": "test_session"
@@ -66,7 +67,7 @@ class TestFSMIntegration:
             "attributes": []
         }
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "nonexistent item", "session_id": "test"})
         
         result = fsm.next()
@@ -74,7 +75,7 @@ class TestFSMIntegration:
         assert "no suitable product" in result_str or "couldn't find" in result_str or "no products found" in result_str
 
     def test_fsm_multiple_state_transitions(self):
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "test product", "session_id": "test"})
         
         states = [fsm.context.current_state]

@@ -1,4 +1,5 @@
 import pytest
+import os
 from unittest.mock import patch, MagicMock
 from swisper_core.session import UnifiedSessionStore
 from contract_engine.contract_engine import ContractStateMachine

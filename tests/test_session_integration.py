@@ -19,7 +19,8 @@ class TestSessionIntegration:
         """Test complete FSM session with pipeline persistence"""
         session_id = "integration_fsm_001"
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(
             session_id=session_id,
             product_query="gaming laptop",
@@ -100,7 +101,8 @@ class TestSessionIntegration:
         """Test that FSM state transitions save enhanced context"""
         session_id = "integration_fsm_002"
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(
             session_id=session_id,
             product_query="test laptop",

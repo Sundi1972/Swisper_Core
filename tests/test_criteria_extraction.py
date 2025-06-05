@@ -47,7 +47,7 @@ def test_contract_integration():
     try:
         from contract_engine.contract_engine import ContractStateMachine
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         
         test_criteria = {
             "base_product": "graphics card",
