@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "swisper": {
+      "command": "python",
+      "args": ["mcp_server/swisper_mcp.py"],
+      "env": {
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+        "SEARCHAPI_API_KEY": "${SEARCHAPI_API_KEY}"
+      }
+    }
+  }
+}

@@ -54,7 +54,7 @@ playwright_tests/
 
 End-to-end test flows using Playwright
 
-Architecture/
+docs/architecture/
 
 System design docs and planning artifacts
 

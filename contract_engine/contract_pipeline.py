@@ -1,5 +1,7 @@
 from haystack.pipelines import Pipeline
 import logging
+from swisper_core import get_logger
+
 
 try:
     from .haystack_components import (
@@ -14,7 +16,7 @@ except ImportError:
         ProductSelectorComponent
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def create_product_selection_pipeline() -> Pipeline:
     pipeline = Pipeline()
@@ -43,8 +45,7 @@ def create_product_selection_pipeline() -> Pipeline:
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     
-    # This example assumes mock_gpus.json is in tests/data/ relative to where this script might be run from
-    # or that tool_adapter.mock_google.py correctly resolves its path.
+    # This example uses the real SearchAPI integration with fallback to mock data
     # For this test to run, PYTHONPATH might need to be set to include the repository root directory.
     # Example: export PYTHONPATH="${PYTHONPATH}:/path/to/your/Swisper_Core_project"
     
@@ -52,7 +53,7 @@ if __name__ == '__main__':
     
     try:
         product_pipeline = create_product_selection_pipeline()
-        test_query = "Mock GPU" 
+        test_query = "GPU" 
         logger.info(f"Running pipeline with query: '{test_query}'")
         
         # The `run` method of Pipeline expects parameters for the first node by their input names.
@@ -81,5 +82,5 @@ if __name__ == '__main__':
 
     except Exception as e:
         logger.error(f"Error running product selection pipeline test: {e}", exc_info=True)
-        logger.error("Ensure that MOCK_DATA_PATH in tool_adapter/mock_google.py is correctly pointing to your tests/data/mock_gpus.json file.")
+        logger.error("Ensure that SEARCHAPI_API_KEY is set for real API access, or that MOCK_DATA_PATH in tool_adapter/mock_google.py is correctly pointing to your tests/data/mock_gpus.json file for fallback.")
         logger.error("Also ensure PYTHONPATH is set up to find 'tool_adapter' and other project modules if running this script directly.")

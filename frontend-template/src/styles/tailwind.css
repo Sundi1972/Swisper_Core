@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Primary Colors */
+    --primary-background: #f5c21e;
+    --primary-foreground: #121722;
+    --primary-light: #ffdd57;
+    --primary-dark: #b18f0a;
+
+    /* Secondary Colors */
+    --secondary-background: #ffffff;
+    --secondary-foreground: #333333;
+    --secondary-light: #f7f7f7;
+    --secondary-dark: #222222;
+
+    /* Accent Colors */
+    --accent-color: #ff5733;
+    --accent-foreground: #ffffff;
+    --accent-light: #ff8268;
+    --accent-dark: #cc4722;
+
+    /* Border Colors */
+    --border-primary: #cccccc;
+    --border-secondary: #999999;
+    --border-light: #e0e0e0;
+    --border-dark: #666666;
+
+    /* Chat Application Colors */
+    --chat-background: #020305;
+    --chat-sidebar: #141923;
+    --chat-message: #222834;
+    --chat-text: #f9fbfc;
+    --chat-secondary: #b6c2d1;
+    --chat-muted: #8f99ad;
+    --chat-accent: #00a9dd;
+  }
+}
+
+@layer utilities {
+  /* Background Color Utilities */
+  .bg-primary-yellow {
+    background-color: var(--primary-background);
+  }
+
+  .bg-primary-light {
+    background-color: var(--primary-light);
+  }
+
+  .bg-primary-dark {
+    background-color: var(--primary-dark);
+  }
+
+  .bg-secondary-white {
+    background-color: var(--secondary-background);
+  }
+
+  .bg-secondary-light {
+    background-color: var(--secondary-light);
+  }
+
+  .bg-secondary-dark {
+    background-color: var(--secondary-dark);
+  }
+
+  .bg-accent {
+    background-color: var(--accent-color);
+  }
+
+  .bg-accent-light {
+    background-color: var(--accent-light);
+  }
+
+  .bg-accent-dark {
+    background-color: var(--accent-dark);
+  }
+
+  /* Chat Application Background Utilities */
+  .bg-chat-main {
+    background-color: var(--chat-background);
+  }
+
+  .bg-chat-sidebar {
+    background-color: var(--chat-sidebar);
+  }
+
+  .bg-chat-message {
+    background-color: var(--chat-message);
+  }
+
+  /* Text Color Utilities */
+  .text-primary-black {
+    color: var(--primary-foreground);
+  }
+
+  .text-secondary-gray {
+    color: var(--secondary-foreground);
+  }
+
+  .text-accent-white {
+    color: var(--accent-foreground);
+  }
+
+  .text-chat-primary {
+    color: var(--chat-text);
+  }
+
+  .text-chat-secondary {
+    color: var(--chat-secondary);
+  }
+
+  .text-chat-muted {
+    color: var(--chat-muted);
+  }
+
+  .text-chat-accent {
+    color: var(--chat-accent);
+  }
+
+  /* Border Color Utilities */
+  .border-primary {
+    border-color: var(--border-primary);
+  }
+
+  .border-secondary {
+    border-color: var(--border-secondary);
+  }
+
+  .border-light {
+    border-color: var(--border-light);
+  }
+
+  .border-dark {
+    border-color: var(--border-dark);
+  }
+
+  .border-chat-accent {
+    border-color: var(--chat-accent);
+  }
+
+  .border-chat-muted {
+    border-color: var(--chat-muted);
+  }
+}

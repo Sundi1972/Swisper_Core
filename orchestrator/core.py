@@ -5,13 +5,18 @@ from typing import List, Dict, Any, Optional
 from openai import AsyncOpenAI 
 from pydantic import BaseModel 
 import datetime 
-import json 
+import json
+from swisper_core import get_logger
 
-# Import Haystack pipeline creation function for contract path
+# Import pipeline creation functions for contract path
 try:
     from contract_engine.contract_pipeline import create_product_selection_pipeline
+    from contract_engine.pipelines.product_search_pipeline import create_product_search_pipeline
+    from contract_engine.pipelines.preference_match_pipeline import create_preference_match_pipeline
 except ImportError: 
     from contract_engine.contract_pipeline import create_product_selection_pipeline
+    create_product_search_pipeline = None
+    create_preference_match_pipeline = None
 
 try:
     from websearch_pipeline.websearch_pipeline import create_websearch_pipeline
@@ -28,9 +33,9 @@ except ImportError:
 try:
     from haystack_pipeline import ask_doc as ask_document_pipeline
     RAG_AVAILABLE = True
-    logging.getLogger(__name__).info("RAG `ask_doc` function imported successfully.")
+    get_logger(__name__).info("RAG `ask_doc` function imported successfully.")
 except ImportError:
-    logging.getLogger(__name__).warning("Failed to import `ask_doc` from `haystack_pipeline`. RAG functionality will be disabled.")
+    get_logger(__name__).warning("Failed to import `ask_doc` from `haystack_pipeline`. RAG functionality will be disabled.")
     RAG_AVAILABLE = False
     # Define a dummy function if import fails, so the rest of the code doesn't break
     def ask_document_pipeline(question: str):
@@ -40,8 +45,9 @@ except ImportError:
 # Import session store functions
 from . import session_store 
 from .session_store import set_pending_confirmation, get_pending_confirmation, clear_pending_confirmation
+from swisper_core.session import load_session_context, cleanup_old_sessions
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Initialize OpenAI client (for chat path)
 try:
@@ -52,7 +58,7 @@ except Exception as e:
     logger.error("Failed to initialize AsyncOpenAI client: %s", e, exc_info=True)
     async_client = None
 
-# Initialize Product Selection Pipeline (Contract Path)
+# Initialize Pipelines (Contract Path)
 try:
     PRODUCT_SELECTION_PIPELINE = create_product_selection_pipeline()
     logger.info("Product Selection Pipeline initialized successfully.")
@@ -60,6 +66,7 @@ except Exception as e:
     logger.error("Failed to initialize Product Selection Pipeline: %s", e, exc_info=True)
     PRODUCT_SELECTION_PIPELINE = None
 
+<<<<<<< HEAD
 # Initialize WebSearch Pipeline
 try:
     if WEBSEARCH_AVAILABLE:
@@ -72,12 +79,48 @@ except Exception as e:
     logger.error("Failed to initialize WebSearch Pipeline: %s", e, exc_info=True)
     WEBSEARCH_PIPELINE = None
 
+||||||| 9b995b5
+=======
+# Initialize new pipeline architecture
+try:
+    if create_product_search_pipeline and create_preference_match_pipeline:
+        PRODUCT_SEARCH_PIPELINE = create_product_search_pipeline()
+        PREFERENCE_MATCH_PIPELINE = create_preference_match_pipeline(top_k=3)
+        logger.info("New pipeline architecture initialized successfully.")
+    else:
+        PRODUCT_SEARCH_PIPELINE = None
+        PREFERENCE_MATCH_PIPELINE = None
+        logger.warning("New pipeline architecture not available, using legacy pipeline.")
+except Exception as e:
+    logger.error("Failed to initialize new pipeline architecture: %s", e, exc_info=True)
+    PRODUCT_SEARCH_PIPELINE = None
+    PREFERENCE_MATCH_PIPELINE = None
+
+>>>>>>> origin/main
 class Message(BaseModel): 
     role: str
     content: str
 
 async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
-    logger.info("Orchestrator handling for session: %s, with %d messages.", session_id, len(messages))
+    logger.info("🚀 Session start: Querying available tools and contracts", extra={"session_id": session_id})
+    
+    try:
+        cleaned_count = cleanup_old_sessions(max_age_hours=24)
+        if cleaned_count > 0:
+            logger.info(f"🧹 Cleaned up {cleaned_count} expired sessions", extra={"session_id": session_id})
+    except Exception as e:
+        logger.warning(f"Failed to cleanup old sessions: {e}")
+    
+    try:
+        from .intent_extractor import load_available_contracts, load_available_tools
+        contracts = load_available_contracts()
+        tools = load_available_tools()
+        logger.info("📋 Available contracts loaded", extra={"session_id": session_id, "contracts": list(contracts.keys())})
+        logger.info("🔧 Available tools loaded", extra={"session_id": session_id, "tools": list(tools.keys()) if tools else []})
+    except Exception as e:
+        logger.error("Failed to load contracts/tools", extra={"session_id": session_id, "error": str(e)})
+    
+    logger.info("🚀 Orchestrator handling request", extra={"session_id": session_id, "message_count": len(messages)})
     
     if not messages:
         logger.warning("Orchestrator received empty messages list for session: %s", session_id)
@@ -96,7 +139,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         product_name = pending_product.get("name", "the selected product")
         if last_user_message_content.lower() in ["yes", "y", "confirm", "ok", "okay", "proceed", "sure"]:
             reply_content = f"Great! Order confirmed for {product_name}."
-            logger.info("Session %s: User confirmed order for %s.", session_id, product_name)
+            logger.info("✅ Order confirmed", extra={"session_id": session_id, "product": product_name})
             try:
                 artifact_dir = "tmp/contracts"
                 os.makedirs(artifact_dir, exist_ok=True)
@@ -116,7 +159,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
             clear_pending_confirmation(session_id)
         elif last_user_message_content.lower() in ["no", "n", "cancel", "stop"]:
             reply_content = f"Okay, the order for {product_name} has been cancelled."
-            logger.info("Session %s: User cancelled order for %s.", session_id, product_name)
+            logger.info("❌ Order cancelled", extra={"session_id": session_id, "product": product_name})
             clear_pending_confirmation(session_id)
         else: 
             reply_content = f"Sorry, I didn't quite understand. For {product_name}, please confirm with 'yes' or 'no'."
@@ -127,6 +170,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         session_store.save_session(session_id)
         return {"reply": reply_content, "session_id": session_id}
 
+<<<<<<< HEAD
     # 2. If no pending confirmation, proceed with routing: Contract, RAG, WebSearch, or Chat
     contract_keywords = r"\b(buy|purchase|order|acquire|get me|shop for|find a|buy an)\b"
     is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
@@ -139,25 +183,177 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
 
     if is_contract_intent:
         logger.info("Contract path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
-        try:
-            # The query for the pipeline is the user message itself (or a processed version if needed)
-            pipeline_result = PRODUCT_SELECTION_PIPELINE.run(query=last_user_message_content)
-            selected_product_node_output = pipeline_result.get("ProductSelector", ({},'')) 
-            selected_product_data = selected_product_node_output[0] 
-            selected_product = selected_product_data.get("selected_product")
-
-            if selected_product and selected_product.get("name"): 
-                set_pending_confirmation(session_id, selected_product)
-                product_name = selected_product.get("name")
-                product_price = selected_product.get("price", "price not available")
-                reply_content = f"I found this product: {product_name} (Price: {product_price}). Would you like to confirm this order? (yes/no)"
-            else:
-                logger.warning("Pipeline did not select a product for session %s. Query: '%s'. Output: %s", session_id, last_user_message_content, pipeline_result)
-                reply_content = "Sorry, I couldn't find a suitable product for your query. Could you try rephrasing or a different product?"
-        except Exception as e:
-            logger.error("Error running ProductSelectionPipeline for session %s: %s", session_id, e, exc_info=True)
-            reply_content = "Sorry, there was an error trying to find products for you."
+||||||| 9b995b5
+    # 2. If no pending confirmation, proceed with routing: Contract, RAG, or Chat
+    contract_keywords = r"\b(buy|purchase|order|acquire|get me|shop for|find a|buy an)\b"
+    is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
     
+    rag_trigger_keyword = "#rag" # Note: conceptual code had "#rag " (with space), this is more flexible
+    is_rag_intent = bool(last_user_message_content.lower().startswith(rag_trigger_keyword))
+
+    if is_contract_intent:
+        logger.info("Contract path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
+=======
+    stored_fsm = session_store.get_contract_fsm(session_id)
+    if stored_fsm:
+        logger.info("🔄 FSM continuation: Retrieved stored FSM for session %s with user input: '%s'", session_id, last_user_message_content)
+        logger.info("🔄 FSM continuation: Current state before processing: %s", stored_fsm.context.current_state if hasattr(stored_fsm, 'context') else 'unknown')
+>>>>>>> origin/main
+        try:
+            result = stored_fsm.next(last_user_message_content)
+            logger.info("🔄 FSM continuation: Processing completed", extra={
+                "session_id": session_id,
+                "result_keys": list(result.keys()) if isinstance(result, dict) else "not_dict",
+                "new_state": stored_fsm.context.current_state if hasattr(stored_fsm, 'context') else 'unknown'
+            })
+            
+            if "ask_user" in result:
+                reply_content = result["ask_user"]
+                logger.info("🔄 FSM continuation: FSM asking user", extra={"session_id": session_id, "question": reply_content})
+                
+                # If it's a confirmation question, set pending confirmation
+                if "confirm" in reply_content.lower() and hasattr(stored_fsm, 'context') and stored_fsm.context.selected_product:
+                    set_pending_confirmation(session_id, stored_fsm.context.selected_product)
+                    # Clear stored FSM since we're moving to confirmation
+                    session_store.set_contract_fsm(session_id, None)
+                    logger.info("🔄 FSM continuation: Moving to confirmation, FSM cleared", extra={"session_id": session_id})
+                elif hasattr(stored_fsm, 'context') and stored_fsm.context.current_state in ["cancelled"]:
+                    session_store.set_contract_fsm(session_id, None)
+                    logger.info("🔄 FSM continuation: FSM cancelled, cleared from storage", extra={"session_id": session_id})
+                else:
+                    session_store.set_contract_fsm(session_id, stored_fsm)
+                    logger.info("🔄 FSM continuation: FSM updated and stored for next interaction", extra={"session_id": session_id, "state": stored_fsm.context.current_state if hasattr(stored_fsm, 'context') else 'unknown'})
+            else:
+                reply_content = "Sorry, I couldn't process your request. Could you try rephrasing?"
+                session_store.set_contract_fsm(session_id, None)
+                logger.error("🔄 FSM continuation: FSM did not return ask_user, clearing FSM", extra={"session_id": session_id, "result": result})
+                
+        except Exception as e:
+            logger.error("🔄 FSM continuation: Error continuing stored contract FSM for session %s: %s", session_id, e, exc_info=True)
+            reply_content = "Sorry, there was an error processing your request."
+            session_store.set_contract_fsm(session_id, None)
+        
+        session_store.add_chat_message(session_id, {"role": "assistant", "content": reply_content})
+        session_store.save_session(session_id)
+        return {"reply": reply_content, "session_id": session_id}
+
+    # 3. If no pending confirmation or stored FSM, proceed with routing using LLM intent extraction
+    try:
+        from .intent_extractor import extract_user_intent
+        from .tool_orchestrator import orchestrate_tools
+        
+        intent_data = extract_user_intent(last_user_message_content)
+        intent_type = intent_data.get("intent_type")
+        parameters = intent_data.get("parameters", {})
+        
+        logger.info("🎯 User intent extracted", extra={
+            "session_id": session_id,
+            "user_input": last_user_message_content,
+            "intent": intent_type, 
+            "confidence": intent_data.get("confidence", 0.0),
+            "reasoning": intent_data.get("reasoning", "")
+        })
+        
+        if intent_type == "contract":
+            contract_template = parameters.get("contract_template")
+            logger.info("🎯 User intent matched to Contract", extra={
+                "session_id": session_id,
+                "contract_template": contract_template
+            })
+        
+    except Exception as e:
+        logger.error("Intent extraction failed, using fallback: %s", e)
+        contract_keywords = r"\b(buy|purchase|order|acquire|get me|shop for|find a|buy an)\b"
+        is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
+        rag_trigger_keyword = "#rag"
+        is_rag_intent = bool(last_user_message_content.lower().startswith(rag_trigger_keyword))
+        
+        if is_contract_intent:
+            intent_type = "contract"
+            parameters = {"contract_template": "purchase_item.yaml", "extracted_query": last_user_message_content}
+        elif is_rag_intent:
+            intent_type = "rag"
+            parameters = {"rag_question": last_user_message_content[len(rag_trigger_keyword):].lstrip()}
+        else:
+            intent_type = "chat"
+            parameters = {}
+
+    if intent_type == "contract":
+        contract_template = parameters.get("contract_template")
+        if contract_template == "purchase_item.yaml":
+            logger.info("🛒 Contract path triggered", extra={"session_id": session_id, "contract_query": last_user_message_content})
+            try:
+                from contract_engine.contract_engine import ContractStateMachine
+                from contract_engine.llm_helpers import extract_initial_criteria
+                
+                logger.info("📝 Extracting criteria from user prompt", extra={"session_id": session_id, "prompt": last_user_message_content})
+                criteria_data = extract_initial_criteria(last_user_message_content)
+                
+                search_query = parameters.get("extracted_query", last_user_message_content)
+                
+                logger.info("📋 Criteria extracted", extra={"session_id": session_id, "criteria": criteria_data})
+                logger.info("🔍 Searching for products", extra={"session_id": session_id, "product": search_query, "criteria": criteria_data})
+                
+                fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
+                
+                enhanced_context = load_session_context(session_id)
+                if enhanced_context:
+                    fsm.context = enhanced_context
+                    logger.info("🔄 Enhanced session context loaded", extra={"session_id": session_id, "state": enhanced_context.current_state})
+                
+                # Initialize FSM with new pipeline architecture if available
+                if PRODUCT_SEARCH_PIPELINE and PREFERENCE_MATCH_PIPELINE:
+                    fsm.product_search_pipeline = PRODUCT_SEARCH_PIPELINE
+                    fsm.preference_match_pipeline = PREFERENCE_MATCH_PIPELINE
+                    logger.info("🔧 FSM initialized with new pipeline architecture", extra={"session_id": session_id})
+                else:
+                    logger.warning("🔧 FSM initialized with legacy architecture", extra={"session_id": session_id})
+                
+                fsm.fill_parameters({
+                    "product": search_query,
+                    "session_id": session_id,
+                    "product_threshold": 10,
+                    "initial_criteria": criteria_data,
+                    "parsed_specifications": criteria_data.get("specifications", {}),
+                    "enhanced_query": search_query
+                })
+                
+                if hasattr(fsm, 'context') and fsm.context:
+                    fsm.context.session_id = session_id
+                
+                logger.info("🔧 FSM initialized", extra={"session_id": session_id, "initial_state": fsm.context.current_state})
+                
+                result = fsm.next()
+                
+                logger.info("🔧 FSM first execution completed", extra={
+                    "session_id": session_id,
+                    "result_keys": list(result.keys()) if isinstance(result, dict) else "not_dict",
+                    "context_state": fsm.context.current_state,
+                    "context_status": fsm.context.contract_status
+                })
+                
+                if "ask_user" in result:
+                    reply_content = result["ask_user"]
+                    logger.info("❓ FSM asking user", extra={"session_id": session_id, "question": reply_content})
+                    
+                    if "confirm" in reply_content.lower() and hasattr(fsm, 'context') and fsm.context.selected_product:
+                        set_pending_confirmation(session_id, fsm.context.selected_product)
+                    elif hasattr(fsm, 'context') and fsm.context.current_state in ["cancelled"]:
+                        session_store.set_contract_fsm(session_id, None)
+                    else:
+                        session_store.set_contract_fsm(session_id, fsm)
+                        logger.info("💾 FSM stored for continuation", extra={"session_id": session_id, "state": fsm.context.current_state})
+                else:
+                    reply_content = "Sorry, I couldn't find a suitable product for your query. Could you try rephrasing or a different product?"
+                    logger.error("❌ FSM did not return ask_user", extra={"session_id": session_id, "result": result})
+                    
+            except Exception as e:
+                logger.error("Error running enhanced contract flow for session %s: %s", session_id, e, exc_info=True)
+                reply_content = "Sorry, there was an error trying to find products for you."
+        else:
+            reply_content = f"Contract template {contract_template} is not yet supported."
+    
+<<<<<<< HEAD
     elif is_websearch_intent and WEBSEARCH_PIPELINE: # WebSearch Path
         logger.info("WebSearch path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
         try:
@@ -182,20 +378,39 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
     elif is_rag_intent: # RAG Path
         logger.info("RAG path for session %s. Input: '%s'", session_id, last_user_message_content)
         question_for_rag = last_user_message_content[len(rag_trigger_keyword):].lstrip()
+||||||| 9b995b5
+    elif is_rag_intent: # RAG Path
+        logger.info("RAG path for session %s. Input: '%s'", session_id, last_user_message_content)
+        question_for_rag = last_user_message_content[len(rag_trigger_keyword):].lstrip()
+=======
+    elif intent_type == "tool_usage":
+        logger.info("Tool usage path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
+        tools_needed = parameters.get("tools_needed", [])
+        if not isinstance(tools_needed, list):
+            tools_needed = [tools_needed] if tools_needed else []
+        try:
+            reply_content = orchestrate_tools(last_user_message_content, tools_needed)
+        except Exception as e:
+            logger.error("Error in tool orchestration for session %s: %s", session_id, e, exc_info=True)
+            reply_content = "Sorry, there was an error using the tools to help you."
+    
+    elif intent_type == "rag":
+        logger.info("📚 RAG path triggered", extra={"session_id": session_id, "rag_question": last_user_message_content})
+        question_for_rag = parameters.get("rag_question", "")
+>>>>>>> origin/main
         
         if not question_for_rag:
             reply_content = "Please provide a question after the #rag trigger."
         else:
             try:
-                # ask_doc is currently synchronous.
                 reply_content = ask_document_pipeline(question=question_for_rag)
-                logger.info("RAG pipeline returned for session %s: '%s...'", session_id, reply_content[:100])
+                logger.info("📖 RAG response generated", extra={"session_id": session_id, "response_preview": reply_content[:100]})
             except Exception as e: 
                 logger.error("Error calling RAG ask_document_pipeline for session %s: %s", session_id, e, exc_info=True)
                 reply_content = "Sorry, there was an error trying to answer your document question."
     
-    else: # General Chat Path
-        logger.info("Chat path for session %s. Input: '%s'", session_id, last_user_message_content)
+    else:
+        logger.info("💬 Chat path triggered", extra={"session_id": session_id, "user_input": last_user_message_content})
         if not async_client:
             logger.error("AsyncOpenAI client not available for chat path.")
             reply_content = "Error: LLM service not available." 

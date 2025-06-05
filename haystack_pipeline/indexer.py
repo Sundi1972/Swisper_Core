@@ -15,7 +15,8 @@ except ImportError:
     # Fallback if running as a script from a different CWD or structure issues
     from haystack_pipeline.rag import DOCUMENT_STORE 
 
-logger = logging.getLogger(__name__)
+from swisper_core import get_logger
+logger = get_logger(__name__)
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")

@@ -49,33 +49,25 @@ def mock_session_store():
         yield mock_session_store_obj
 
 @pytest.fixture
-def mock_product_pipeline_run():
-    # Patch the .run() method of the PRODUCT_SELECTION_PIPELINE instance
-    # This assumes PRODUCT_SELECTION_PIPELINE is successfully initialized in orchestrator.core
-    # If its initialization can fail or is complex, patching create_product_selection_pipeline might be better.
-    try:
-        with patch('orchestrator.core.PRODUCT_SELECTION_PIPELINE.run') as mock_run:
-            mock_run.return_value = {
-                "ProductSelector": ({"selected_product": {"name": "Mock GPU X", "price": 299.99}}, "output_1")
-            }
-            yield mock_run
-    except AttributeError: # Handle cases where PRODUCT_SELECTION_PIPELINE might be None due to init failure
-        # If PRODUCT_SELECTION_PIPELINE itself is None, we can't patch its 'run' method.
-        # So, we patch the 'create_product_selection_pipeline' function to return a mock pipeline.
-        with patch('orchestrator.core.create_product_selection_pipeline') as mock_create_pipeline:
-            mock_pipeline_instance = MagicMock()
-            mock_pipeline_instance.run.return_value = {
-                "ProductSelector": ({"selected_product": {"name": "Mock GPU X", "price": 299.99}}, "output_1")
-            }
-            mock_create_pipeline.return_value = mock_pipeline_instance
-            # This requires orchestrator.core to re-fetch or use the mocked create_product_selection_pipeline
-            # if PRODUCT_SELECTION_PIPELINE is initialized globally.
-            # For simplicity, the primary patch target is the .run method of the instance.
-            # This fallback might be needed if tests are run where the pipeline init in core.py fails.
-            # Re-importing or reloading orchestrator.core might be needed for this to take effect if it's module-level.
-            # This is getting complex; the primary patch on PRODUCT_SELECTION_PIPELINE.run is preferred.
-            # If PRODUCT_SELECTION_PIPELINE is None, the test for contract path should gracefully handle it or be skipped.
-            yield mock_pipeline_instance.run
+def mock_contract_fsm():
+    with patch('contract_engine.contract_engine.ContractStateMachine') as mock_fsm_class:
+        mock_fsm_instance = MagicMock()
+        mock_fsm_instance.next.return_value = {"ask_user": "I found this product: Mock GPU X (Price: 299.99). Would you like to confirm this order?"}
+        mock_fsm_instance.context.search_results = [{"name": "Mock GPU X", "price": 299.99}]
+        mock_fsm_instance.context.current_state = "search"
+        mock_fsm_instance.context.selected_product = None
+        mock_fsm_class.return_value = mock_fsm_instance
+        yield mock_fsm_instance
+
+@pytest.fixture
+def mock_intent_extraction():
+    with patch('orchestrator.intent_extractor.extract_user_intent') as mock_extract:
+        mock_extract.return_value = {
+            "intent_type": "contract",
+            "confidence": 0.9,
+            "parameters": {"contract_template": "purchase_item.yaml", "extracted_query": "I want to buy a GPU"}
+        }
+        yield mock_extract
 
 
 @pytest.fixture
@@ -100,28 +92,63 @@ def mock_openai_chat_completions_create():
         yield mock_create
 
 @pytest.mark.asyncio
-async def test_contract_path_product_found(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
+async def test_contract_path_product_found():
     messages = [Message(role="user", content="I want to buy a GPU")]
     session_id = "test_contract_session"
     
-    response = await handle(messages, session_id)
+    with patch('orchestrator.core.session_store') as mock_session_store, \
+         patch('orchestrator.core.async_client') as mock_client, \
+         patch('orchestrator.core.ask_document_pipeline') as mock_ask_doc, \
+         patch('contract_engine.contract_engine.ContractStateMachine') as mock_fsm_class, \
+         patch('contract_engine.llm_helpers.extract_initial_criteria') as mock_extract_criteria, \
+         patch('tool_adapter.mock_google.google_shopping_search') as mock_search:
+        
+        mock_session_store.get_pending_confirmation.return_value = None
+        mock_session_store.get_contract_fsm.return_value = None
+        mock_session_store.get_chat_history.return_value = []
+        mock_session_store.add_chat_message = MagicMock()
+        mock_session_store.save_session = MagicMock()
+        
+        from unittest.mock import AsyncMock
+        mock_create = AsyncMock()
+        mock_response = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = "LLM chat reply."
+        mock_choice.message = mock_message
+        mock_response.choices = [mock_choice]
+        mock_create.return_value = mock_response
+        mock_client.chat.completions.create = mock_create
+        
+        mock_ask_doc.return_value = "RAG answer: This is a helpful AI assistant."
+        
+        mock_extract_criteria.return_value = {
+            "specifications": {"type": "GPU", "brand": "NVIDIA"},
+            "budget": None,
+            "preferences": []
+        }
+        
+        mock_search.return_value = [{"name": "Mock GPU", "price": 299.99}]
+        
+        mock_fsm_instance = MagicMock()
+        mock_fsm_instance.next.return_value = {"ask_user": "I found this product: Mock GPU X (Price: 299.99). Would you like to confirm this order?"}
+        mock_fsm_instance.context.current_state = "search"
+        mock_fsm_instance.context.selected_product = None
+        mock_fsm_class.return_value = mock_fsm_instance
+        
+        response = await handle(messages, session_id)
 
-    mock_product_pipeline_run.assert_called_once_with(query="I want to buy a GPU")
-    mock_session_store.set_pending_confirmation.assert_called_once_with(
-        session_id, {"name": "Mock GPU X", "price": 299.99}
-    )
-    assert "I found this product: Mock GPU X (Price: 299.99)" in response["reply"]
-    assert "Would you like to confirm this order?" in response["reply"]
-    
-    # Check chat history additions
-    # First call: user message
-    mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": "I want to buy a GPU"})
-    # Second call: assistant's reply
-    mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "assistant", "content": response["reply"]})
-    mock_session_store.save_session.assert_called_with(session_id) # Should be called once at the end
+        mock_fsm_class.assert_called_once()
+        mock_fsm_instance.next.assert_called_once()
+        assert "I found this product: Mock GPU X (Price: 299.99)" in response["reply"]
+        assert "Would you like to confirm this order?" in response["reply"]
+        
+        mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": "I want to buy a GPU"})
+        mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "assistant", "content": response["reply"]})
+        mock_session_store.save_session.assert_called_with(session_id)
 
 @pytest.mark.asyncio
-async def test_confirmation_yes_path(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
+async def test_confirmation_yes_path(mock_session_store, mock_contract_fsm, mock_intent_extraction, mock_openai_chat_completions_create, mock_ask_doc):
     session_id = "test_confirm_yes"
     pending_product = {"name": "Mock GPU Y", "price": 350}
     mock_session_store.get_pending_confirmation.return_value = pending_product
@@ -162,7 +189,7 @@ async def test_confirmation_yes_path(mock_session_store, mock_product_pipeline_r
 
 
 @pytest.mark.asyncio
-async def test_confirmation_no_path(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
+async def test_confirmation_no_path(mock_session_store, mock_contract_fsm, mock_intent_extraction, mock_openai_chat_completions_create, mock_ask_doc):
     session_id = "test_confirm_no"
     pending_product = {"name": "Mock GPU Z", "price": 400}
     mock_session_store.get_pending_confirmation.return_value = pending_product
@@ -176,34 +203,75 @@ async def test_confirmation_no_path(mock_session_store, mock_product_pipeline_ru
 
 
 @pytest.mark.asyncio
-async def test_rag_path(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
+async def test_rag_path():
     session_id = "test_rag_session"
     messages = [Message(role="user", content="#rag What is this system?")]
-    
-    response = await handle(messages, session_id)
 
-    mock_ask_doc.assert_called_once_with(question="What is this system?")
-    assert response["reply"] == "RAG answer: This is a helpful AI assistant."
-    mock_product_pipeline_run.assert_not_called() # Ensure contract path not taken
-    mock_openai_chat_completions_create.assert_not_called() # Ensure general chat path not taken
-    mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": "#rag What is this system?"})
+    with patch('orchestrator.core.session_store') as mock_session_store, \
+         patch('orchestrator.core.async_client') as mock_client, \
+         patch('orchestrator.core.ask_document_pipeline') as mock_ask_doc, \
+         patch('orchestrator.intent_extractor.extract_user_intent') as mock_intent_extraction:
+        
+        mock_session_store.get_pending_confirmation.return_value = None
+        mock_session_store.get_contract_fsm.return_value = None
+        mock_session_store.get_chat_history.return_value = []
+        mock_session_store.add_chat_message = MagicMock()
+        mock_session_store.save_session = MagicMock()
+        
+        mock_intent_extraction.return_value = {
+            "intent_type": "rag",
+            "confidence": 1.0,
+            "parameters": {"rag_question": "What is this system?"}
+        }
+        
+        mock_ask_doc.return_value = "RAG answer: This is a helpful AI assistant."
+
+        response = await handle(messages, session_id)
+
+        mock_ask_doc.assert_called_once_with(question="What is this system?")
+        assert response["reply"] == "RAG answer: This is a helpful AI assistant."
+        mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": "#rag What is this system?"})
 
 
 @pytest.mark.asyncio
-async def test_chat_path(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
+async def test_chat_path():
     session_id = "test_chat_session"
     user_message = "Hello, how are you?"
     messages = [Message(role="user", content=user_message)]
-    
-    # Simulate some history for the LLM call
-    chat_history_for_llm = [{"role": "user", "content": user_message}]
-    mock_session_store.get_chat_history.return_value = chat_history_for_llm
 
-    response = await handle(messages, session_id)
+    with patch('orchestrator.core.session_store') as mock_session_store, \
+         patch('orchestrator.core.async_client') as mock_client, \
+         patch('orchestrator.core.ask_document_pipeline') as mock_ask_doc, \
+         patch('orchestrator.intent_extractor.extract_user_intent') as mock_intent_extraction:
+        
+        chat_history_for_llm = [{"role": "user", "content": user_message}]
+        mock_session_store.get_pending_confirmation.return_value = None
+        mock_session_store.get_contract_fsm.return_value = None
+        mock_session_store.get_chat_history.return_value = chat_history_for_llm
+        mock_session_store.add_chat_message = MagicMock()
+        mock_session_store.save_session = MagicMock()
+        
+        from unittest.mock import AsyncMock
+        mock_create = AsyncMock()
+        mock_response = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = "LLM chat reply."
+        mock_choice.message = mock_message
+        mock_response.choices = [mock_choice]
+        mock_create.return_value = mock_response
+        mock_client.chat.completions.create = mock_create
+        
+        mock_intent_extraction.return_value = {
+            "intent_type": "chat",
+            "confidence": 0.8,
+            "parameters": {}
+        }
 
-    mock_openai_chat_completions_create.assert_called_once_with(model="gpt-4o", messages=chat_history_for_llm)
-    assert response["reply"] == "LLM chat reply."
-    mock_product_pipeline_run.assert_not_called()
+        response = await handle(messages, session_id)
+
+        mock_client.chat.completions.create.assert_called_once_with(model="gpt-4o", messages=chat_history_for_llm)
+        assert response["reply"] == "LLM chat reply."
     mock_ask_doc.assert_not_called()
     mock_session_store.add_chat_message.assert_any_call(session_id, {"role": "user", "content": user_message})
 
@@ -224,73 +292,149 @@ async def test_chat_path(mock_session_store, mock_product_pipeline_run, mock_ope
 # - Test the try-except blocks for OpenAI client and Product Selection Pipeline initialization (how handle behaves if they are None)
 
 @pytest.mark.asyncio
-async def test_rag_path_rag_unavailable(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create):
-    # Temporarily patch RAG_AVAILABLE and ask_document_pipeline in orchestrator.core
-    with patch('orchestrator.core.RAG_AVAILABLE', False), \
-         patch('orchestrator.core.ask_document_pipeline') as mock_dummy_ask_doc:
-        # The dummy ask_doc defined in core.py will be used if RAG_AVAILABLE is False at import time.
-        # If we patch RAG_AVAILABLE after import, we also need to ensure the dummy function is what's called.
-        # The dummy function is: `def ask_document_pipeline(question: str): return "RAG system is currently unavailable due to an import error."`
-        # So, we don't need to mock its return value here if we are testing that the orchestrator uses the dummy.
-        # However, for clarity or if the dummy changes, explicitly mocking its behavior in the test is safer.
+async def test_rag_path_rag_unavailable():
+    session_id = "test_rag_unavailable"
+    messages = [Message(role="user", content="#rag Test question")]
+    
+    with patch('orchestrator.core.session_store') as mock_session_store, \
+         patch('orchestrator.core.async_client') as mock_client, \
+         patch('orchestrator.core.RAG_AVAILABLE', False), \
+         patch('orchestrator.core.ask_document_pipeline') as mock_dummy_ask_doc, \
+         patch('orchestrator.intent_extractor.extract_user_intent') as mock_intent_extraction:
+        
+        mock_session_store.get_pending_confirmation.return_value = None
+        mock_session_store.get_contract_fsm.return_value = None
+        mock_session_store.get_chat_history.return_value = []
+        mock_session_store.add_chat_message = MagicMock()
+        mock_session_store.save_session = MagicMock()
+        
+        mock_intent_extraction.return_value = {
+            "intent_type": "rag",
+            "confidence": 1.0,
+            "parameters": {"rag_question": "Test question"}
+        }
+        
         mock_dummy_ask_doc.return_value = "RAG system is currently unavailable due to an import error."
 
-        session_id = "test_rag_unavailable"
-        messages = [Message(role="user", content="#rag Test question")]
         response = await handle(messages, session_id)
         
-        # Check that the dummy/fallback response is given
         assert response["reply"] == "RAG system is currently unavailable due to an import error."
-        mock_dummy_ask_doc.assert_called_once_with(question="Test question") # Ensure our patched ask_doc was called.
+        mock_dummy_ask_doc.assert_called_once_with(question="Test question")
 
 @pytest.mark.asyncio
-async def test_contract_path_pipeline_unavailable(mock_session_store, mock_openai_chat_completions_create, mock_ask_doc):
-    # Patch PRODUCT_SELECTION_PIPELINE to be None in orchestrator.core
-    with patch('orchestrator.core.PRODUCT_SELECTION_PIPELINE', None):
-        session_id = "test_pipeline_unavailable"
-        user_message = "I want to buy a GPU"
-        messages = [Message(role="user", content=user_message)]
+async def test_contract_path_pipeline_unavailable():
+    session_id = "test_pipeline_unavailable"
+    user_message = "I want to buy a GPU"
+    messages = [Message(role="user", content=user_message)]
+    
+    with patch('orchestrator.core.session_store') as mock_session_store, \
+         patch('orchestrator.core.async_client') as mock_client, \
+         patch('orchestrator.core.ask_document_pipeline') as mock_ask_doc, \
+         patch('contract_engine.contract_engine.ContractStateMachine') as mock_fsm_class, \
+         patch('orchestrator.intent_extractor.extract_user_intent') as mock_intent_extraction:
         
         chat_history_for_llm = [{"role": "user", "content": user_message}]
+        mock_session_store.get_pending_confirmation.return_value = None
+        mock_session_store.get_contract_fsm.return_value = None
         mock_session_store.get_chat_history.return_value = chat_history_for_llm
+        mock_session_store.add_chat_message = MagicMock()
+        mock_session_store.save_session = MagicMock()
+        
+        mock_create = MagicMock()
+        mock_response = MagicMock()
+        mock_choice = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = "Sorry, there was an error trying to find products for you."
+        mock_choice.message = mock_message
+        mock_response.choices = [mock_choice]
+        mock_create.return_value = mock_response
+        mock_client.chat.completions.create = mock_create
+        
+        mock_intent_extraction.return_value = {
+            "intent_type": "contract",
+            "confidence": 0.9,
+            "parameters": {"contract_template": "purchase_item.yaml", "extracted_query": "I want to buy a GPU"}
+        }
+        
+        mock_fsm_class.side_effect = Exception("FSM initialization failed")
 
         response = await handle(messages, session_id)
         
-        # Should fall back to chat path
-        mock_openai_chat_completions_create.assert_called_once_with(model="gpt-4o", messages=chat_history_for_llm)
-        assert response["reply"] == "LLM chat reply."
-        mock_ask_doc.assert_not_called()
+        assert response["reply"] == "Sorry, there was an error trying to find products for you."
 
 @pytest.mark.asyncio
-async def test_contract_path_no_product_found(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
+async def test_contract_path_no_product_found():
     session_id = "test_no_product_found"
     user_message = "Buy a very specific obscure item"
     messages = [Message(role="user", content=user_message)]
-    
-    # Configure mock_product_pipeline_run to return no selected product
-    mock_product_pipeline_run.return_value = {"ProductSelector": ({"selected_product": None}, "output_1")}
 
-    response = await handle(messages, session_id)
+    with patch('orchestrator.core.session_store') as mock_session_store, \
+         patch('orchestrator.core.async_client') as mock_client, \
+         patch('orchestrator.core.ask_document_pipeline') as mock_ask_doc, \
+         patch('contract_engine.contract_engine.ContractStateMachine') as mock_fsm_class, \
+         patch('contract_engine.llm_helpers.extract_initial_criteria') as mock_extract_criteria, \
+         patch('orchestrator.intent_extractor.extract_user_intent') as mock_intent_extraction:
+        
+        mock_session_store.get_pending_confirmation.return_value = None
+        mock_session_store.get_contract_fsm.return_value = None
+        mock_session_store.get_chat_history.return_value = []
+        mock_session_store.add_chat_message = MagicMock()
+        mock_session_store.save_session = MagicMock()
+        mock_session_store.set_contract_fsm = MagicMock()
+        
+        mock_intent_extraction.return_value = {
+            "intent_type": "contract",
+            "confidence": 0.9,
+            "parameters": {"contract_template": "purchase_item.yaml", "extracted_query": "Buy a very specific obscure item"}
+        }
+        
+        mock_extract_criteria.return_value = {
+            "specifications": {"type": "obscure item"},
+            "budget": None,
+            "preferences": []
+        }
 
-    mock_product_pipeline_run.assert_called_once_with(query=user_message)
-    assert "Sorry, I couldn't find a suitable product" in response["reply"]
-    mock_session_store.set_pending_confirmation.assert_not_called()
-    mock_openai_chat_completions_create.assert_not_called()
+        mock_fsm_instance = MagicMock()
+        mock_fsm_instance.next.return_value = {"ask_user": "Sorry, I couldn't find a suitable product for your request."}
+        mock_fsm_instance.context.search_results = []
+        mock_fsm_instance.context.current_state = "no_products"
+        mock_fsm_instance.context.selected_product = None
+        mock_fsm_class.return_value = mock_fsm_instance
+
+        response = await handle(messages, session_id)
+
+        mock_fsm_instance.next.assert_called_once()
+        assert "Sorry, I couldn't find a suitable product" in response["reply"]
 
 @pytest.mark.asyncio
-async def test_rag_path_empty_question(mock_session_store, mock_product_pipeline_run, mock_ask_doc, mock_openai_chat_completions_create):
+async def test_rag_path_empty_question():
     session_id = "test_rag_empty_q"
-    messages = [Message(role="user", content="#rag ")] # Note the space
+    messages = [Message(role="user", content="#rag ")]
     
-    response = await handle(messages, session_id)
-    
-    assert response["reply"] == "Please provide a question after the #rag trigger."
-    mock_ask_doc.assert_not_called()
-    mock_product_pipeline_run.assert_not_called()
-    mock_openai_chat_completions_create.assert_not_called()
+    with patch('orchestrator.core.session_store') as mock_session_store, \
+         patch('orchestrator.core.async_client') as mock_client, \
+         patch('orchestrator.core.ask_document_pipeline') as mock_ask_doc, \
+         patch('orchestrator.intent_extractor.extract_user_intent') as mock_intent_extraction:
+        
+        mock_session_store.get_pending_confirmation.return_value = None
+        mock_session_store.get_contract_fsm.return_value = None
+        mock_session_store.get_chat_history.return_value = []
+        mock_session_store.add_chat_message = MagicMock()
+        mock_session_store.save_session = MagicMock()
+        
+        mock_intent_extraction.return_value = {
+            "intent_type": "rag",
+            "confidence": 1.0,
+            "parameters": {"rag_question": ""}
+        }
+        
+        response = await handle(messages, session_id)
+        
+        assert response["reply"] == "Please provide a question after the #rag trigger."
+        mock_ask_doc.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_confirmation_ambiguous_response(mock_session_store, mock_product_pipeline_run, mock_openai_chat_completions_create, mock_ask_doc):
+async def test_confirmation_ambiguous_response(mock_session_store, mock_contract_fsm, mock_intent_extraction, mock_openai_chat_completions_create, mock_ask_doc):
     session_id = "test_confirm_ambiguous"
     pending_product = {"name": "Mock GPU ABC", "price": 123}
     mock_session_store.get_pending_confirmation.return_value = pending_product

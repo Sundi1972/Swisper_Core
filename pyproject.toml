@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [tool.poetry]
 name = "swisper-core"
 version = "0.1.0"
@@ -42,3 +43,58 @@ setuptools = "^80.9.0"
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+||||||| 9b995b5
+=======
+[tool.poetry]
+name = "swisper-core"
+version = "0.1.0"
+description = "swisper contract engine backend"
+authors = ["Heiko Sundermann <heiko.sundermann@fintama.com>"]
+license = "proprietary"
+readme = "README.md"
+packages = [
+    {include = "swisper_core"},
+    {include = "contract_engine"},
+    {include = "gateway"},
+    {include = "haystack_pipeline"},
+    {include = "orchestrator"},
+    {include = "tool_adapter"}
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydantic = "^1.10"
+numpy = "<2"
+fastapi = "^0.115.12"
+uvicorn = {extras = ["standard"], version = "^0.34.3"}
+openai = "^1.82.1"
+pyyaml = "^6.0.2"
+jsonschema = "^4.24.0"
+python-multipart = "^0.0.20"
+langdetect = "^1.0.9"
+emoji = "^2.14.1"
+farm-haystack = "^1.26.4.post0"
+redis = "^5.0.0"
+nltk = "^3.8"
+sentencepiece = "^0.1.99"
+psycopg2-binary = "^2.9.10"
+sqlalchemy = "^2.0.41"
+pymilvus = "^2.5.10"
+sentence-transformers = "^4.1.0"
+spacy = "^3.7.0"
+cryptography = "^42.0.0"
+boto3 = "^1.35.0"
+setuptools = "^80.9.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+pytest-asyncio = "^1.0.0"
+pylint = "^3.3.7"
+setuptools = "^80.9.0"
+torch = "^2.7.1"
+transformers = "^4.52.4"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+>>>>>>> origin/main
