@@ -266,13 +266,8 @@ class LLMSummarizerComponent(BaseComponent):
         try:
             from haystack.nodes import TransformersSummarizer
             
-            self.summarizer = TransformersSummarizer(
-                model_name_or_path="t5-small",
-                use_gpu=False,  # CPU inference for consistency
-                max_length=150,
-                min_length=50
-            )
-            logger.info("T5 summarizer initialized successfully")
+            logger.warning("T5 summarizer temporarily disabled due to compatibility issues, using simple summarization")
+            self.summarizer = None
             
         except ImportError:
             logger.warning("TransformersSummarizer not available, falling back to simple concatenation")
@@ -300,10 +295,12 @@ class LLMSummarizerComponent(BaseComponent):
             else:
                 summary = self._generate_simple_summary(ranked_results, query)
             
-            return {
+            result_data = {
                 "summary": summary,
                 "sources": sources
-            }, "output_1"
+            }
+            logger.info(f"🔍 DEBUG: LLMSummarizerComponent returning: {result_data}")
+            return result_data, "output_1"
             
         except Exception as e:
             logger.error(f"Error in LLMSummarizerComponent: {e}")
@@ -344,13 +341,20 @@ class LLMSummarizerComponent(BaseComponent):
     def _generate_simple_summary(self, ranked_results: List[Dict[str, Any]], query: str) -> str:
         """Generate simple summary by concatenating top snippets"""
         try:
+            logger.info(f"🔍 DEBUG: _generate_simple_summary received {len(ranked_results)} ranked_results")
+            for i, result in enumerate(ranked_results[:3]):
+                logger.info(f"🔍 DEBUG: Result {i}: title='{result.get('title', '')}', snippet='{result.get('snippet', '')}'")
+            
             snippets = [
                 result.get("snippet", "")
                 for result in ranked_results[:3]
                 if result.get("snippet")
             ]
             
+            logger.info(f"🔍 DEBUG: Extracted {len(snippets)} snippets: {snippets}")
+            
             if not snippets:
+                logger.warning("🔍 DEBUG: No snippets found, returning fallback message")
                 return "No relevant information found."
             
             summary = f"Based on current web search results for '{query}': "
@@ -359,6 +363,7 @@ class LLMSummarizerComponent(BaseComponent):
             if len(summary) > 500:
                 summary = summary[:497] + "..."
             
+            logger.info(f"🔍 DEBUG: Generated summary: {summary}")
             return summary
             
         except Exception as e:
