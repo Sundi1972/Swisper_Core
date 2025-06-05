@@ -13,8 +13,10 @@ logger = get_logger(__name__)
 def load_available_contracts() -> Dict[str, Any]:
     """Load available contract templates"""
     contracts = {}
-    contract_dir = "contract_templates"
+    current_dir = os.path.dirname(os.path.dirname(__file__))  # Go up from orchestrator to repo root
+    contract_dir = os.path.join(current_dir, "contract_templates")
     
+    logger.info(f"Looking for contracts in: {contract_dir}")
     if os.path.exists(contract_dir):
         for filename in os.listdir(contract_dir):
             if filename.endswith('.yaml') or filename.endswith('.yml'):
@@ -161,16 +163,27 @@ def extract_user_intent(user_message: str) -> Dict[str, Any]:
 def _classify_intent_with_llm(user_message: str, routing_manifest: Dict[str, Any]) -> Dict[str, Any]:
     """Use dedicated LLM to classify intent based on routing manifest"""
     
+    available_templates = []
+    for option in routing_manifest.get("routing_options", []):
+        if option.get("intent_type") == "contract":
+            for contract in option.get("contracts", []):
+                available_templates.append(contract.get("template"))
+    
     system_prompt = f"""You are a routing assistant for an intelligent agent platform. Given a user message and a list of available intents, choose the most appropriate one and justify your decision.
 
 AVAILABLE ROUTING OPTIONS:
 {json.dumps(routing_manifest, indent=2)}
 
 CLASSIFICATION RULES:
-1. For purchase-related requests (buy, purchase, order, acquire, shop for), use "contract" intent with purchase_item template
-2. For document questions starting with "#rag", use "rag" intent
+1. For purchase-related requests (buy, purchase, order, acquire, shop for), use "contract" intent
+2. For document questions starting with "#rag", use "rag" intent  
 3. For analysis, comparison, or tool-based tasks, use "tool_usage" intent
 4. For general conversation, use "chat" intent
+
+STRICT TEMPLATE SELECTION:
+- You MUST only select contract templates from this exact list: {available_templates}
+- Do NOT invent template names like "filename.yaml" 
+- For purchase requests, use EXACTLY: "purchase_item.yaml"
 
 CONFIDENCE SCORING:
 - 0.9-1.0: Very clear intent match with strong keywords
@@ -182,14 +195,14 @@ Respond with JSON in this exact format:
 {{
   "intent_type": "contract|rag|tool_usage|chat",
   "confidence": 0.0-1.0,
-  "contract_template": "filename.yaml or null",
+  "contract_template": "purchase_item.yaml|null",
   "tools_needed": ["tool1", "tool2"] or [],
-  "extracted_query": "enhanced search query or original message",
+  "extracted_query": "enhanced search query or original message", 
   "rag_question": "document question or null",
   "reasoning": "detailed explanation of classification decision including matched keywords and context"
 }}
 
-IMPORTANT: Be conservative with confidence scores. Only use high confidence (>0.8) when intent is very clear."""
+CRITICAL: Only use exact template names from the available list. Never invent new template names."""
 
     user_prompt = f"User message: {user_message}"
     
@@ -223,8 +236,28 @@ IMPORTANT: Be conservative with confidence scores. Only use high confidence (>0.
             if field not in intent_data:
                 raise ValueError(f"Missing required field: {field}")
         
+        available_templates = []
+        for option in routing_manifest.get("routing_options", []):
+            if option.get("intent_type") == "contract":
+                for contract in option.get("contracts", []):
+                    available_templates.append(contract.get("template"))
+        
         if "contract_template" not in intent_data:
             intent_data["contract_template"] = None
+        elif intent_data["contract_template"]:
+            template = intent_data["contract_template"]
+            logger.info(f"LLM returned contract_template: '{template}'")
+            
+            if template in available_templates:
+                logger.info(f"✅ Valid contract template: '{template}'")
+            else:
+                logger.warning(f"❌ Invalid contract template '{template}' not in available list: {available_templates}")
+                if intent_data.get("intent_type") == "contract" and "purchase_item.yaml" in available_templates:
+                    intent_data["contract_template"] = "purchase_item.yaml"
+                    logger.info(f"🔧 Corrected to valid template: 'purchase_item.yaml'")
+                else:
+                    logger.error(f"No valid contract template found, falling back to chat")
+                    return _create_chat_fallback(user_message, f"Invalid contract template: {template}")
         if "tools_needed" not in intent_data:
             intent_data["tools_needed"] = []
         if "extracted_query" not in intent_data:
