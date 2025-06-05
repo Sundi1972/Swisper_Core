@@ -3,12 +3,14 @@ from typing import Dict, List, Any
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
 import time
+from swisper_core import get_logger
+
 
 class FSMStateMonitor:
     """High-performance logging-only monitoring for FSM state corruption detection"""
     
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.transition_counts = defaultdict(int)
         self.failure_counts = defaultdict(int)
         self.recent_transitions = defaultdict(lambda: deque(maxlen=5))

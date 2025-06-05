@@ -5,7 +5,8 @@ from typing import List, Dict, Any, Optional
 from openai import AsyncOpenAI 
 from pydantic import BaseModel 
 import datetime 
-import json 
+import json
+from swisper_core import get_logger
 
 # Import pipeline creation functions for contract path
 try:
@@ -21,9 +22,9 @@ except ImportError:
 try:
     from haystack_pipeline import ask_doc as ask_document_pipeline
     RAG_AVAILABLE = True
-    logging.getLogger(__name__).info("RAG `ask_doc` function imported successfully.")
+    get_logger(__name__).info("RAG `ask_doc` function imported successfully.")
 except ImportError:
-    logging.getLogger(__name__).warning("Failed to import `ask_doc` from `haystack_pipeline`. RAG functionality will be disabled.")
+    get_logger(__name__).warning("Failed to import `ask_doc` from `haystack_pipeline`. RAG functionality will be disabled.")
     RAG_AVAILABLE = False
     # Define a dummy function if import fails, so the rest of the code doesn't break
     def ask_document_pipeline(question: str):
@@ -33,9 +34,9 @@ except ImportError:
 # Import session store functions
 from . import session_store 
 from .session_store import set_pending_confirmation, get_pending_confirmation, clear_pending_confirmation
-from contract_engine.session_persistence import load_session_context, cleanup_old_sessions
+from swisper_core.session import load_session_context, cleanup_old_sessions
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Initialize OpenAI client (for chat path)
 try:
@@ -194,7 +195,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         parameters = intent_data.get("parameters", {})
         
         logger.info("🎯 User intent extracted", extra={
-            "session_id": session_id, 
+            "session_id": session_id,
+            "user_input": last_user_message_content,
             "intent": intent_type, 
             "confidence": intent_data.get("confidence", 0.0),
             "reasoning": intent_data.get("reasoning", "")
@@ -240,7 +242,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
                 logger.info("📋 Criteria extracted", extra={"session_id": session_id, "criteria": criteria_data})
                 logger.info("🔍 Searching for products", extra={"session_id": session_id, "product": search_query, "criteria": criteria_data})
                 
-                fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+                fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
                 
                 enhanced_context = load_session_context(session_id)
                 if enhanced_context:

@@ -265,8 +265,8 @@ def analyze_product_differences(product_list: list) -> list:
         return ["price", "brand", "capacity", "energy_efficiency", "size", "features"]
 
 def analyze_user_preferences(user_input: str, product_search_results: list) -> dict:
-    import logging
-    logger = logging.getLogger(__name__)
+    from swisper_core import get_logger
+    logger = get_logger(__name__)
     
     logger.info(f"🔍 Starting preference extraction for input: '{user_input[:100]}...'")
     logger.info(f"📦 Analyzing {len(product_search_results)} sample products")

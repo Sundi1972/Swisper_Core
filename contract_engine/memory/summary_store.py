@@ -1,9 +1,9 @@
-import logging
 from typing import List, Dict, Any, Optional
 import time
 import json
 from .redis_client import redis_client
 from .message_serializer import MessageSerializer
+from swisper_core import get_logger
 try:
     from orchestrator.postgres_session_store import PostgresSessionStore
     postgres_session_store = PostgresSessionStore()
@@ -17,7 +17,7 @@ class SummaryStore:
         self.redis_ttl = redis_ttl
         self.serializer = MessageSerializer()
         self.postgres_store = postgres_session_store
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
     
     def _get_summary_key(self, session_id: str) -> str:
         """Generate Redis key for session summary"""

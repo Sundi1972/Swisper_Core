@@ -1,9 +1,9 @@
 import os
-import logging
 import datetime
 from typing import List, Dict, Any, Optional
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
     from .postgres_session_store import (
@@ -135,9 +135,9 @@ except Exception as e:
             if context_data:
                 try:
                     from contract_engine.contract_engine import ContractStateMachine
-                    from contract_engine.context import SwisperContext
+                    from swisper_core import SwisperContext
                     
-                    contract_template = context_data.get('contract_template', 'contract_templates/purchase_item.yaml')
+                    contract_template = context_data.get('contract_template', os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
                     fsm = ContractStateMachine(contract_template)
                     fsm.context = SwisperContext.from_dict(context_data)
                     
@@ -159,7 +159,7 @@ except Exception as e:
                         try:
                             from contract_engine.contract_engine import ContractStateMachine
                             context_dict = stored_obj.to_dict()
-                            contract_template = context_dict.get('contract_template', 'contract_templates/purchase_item.yaml')
+                            contract_template = context_dict.get('contract_template', os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
                             fsm = ContractStateMachine(contract_template)
                             fsm.context = stored_obj
                             logger.info(f"Reconstructed FSM from stored context for session {session_id}")

@@ -1,3 +1,0 @@
-Swisper helps manage contracts efficiently.
-It can also answer questions about documents.
-The RAG pipeline uses advanced AI models.

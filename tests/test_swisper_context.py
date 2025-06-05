@@ -7,7 +7,7 @@ import pytest
 from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 from contract_engine.contract_engine import ContractStateMachine
 
 class TestSwisperContext:
@@ -62,7 +62,7 @@ class TestSwisperContext:
 class TestContractStateMachineWithContext:
     def test_fsm_context_initialization(self):
         """Test FSM initializes with SwisperContext"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         
         assert hasattr(fsm, 'context')
         assert isinstance(fsm.context, SwisperContext)
@@ -71,7 +71,7 @@ class TestContractStateMachineWithContext:
         
     def test_fsm_context_parameter_filling(self):
         """Test context updates when parameters are filled"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         
         fsm.fill_parameters({
             "session_id": "test_123",

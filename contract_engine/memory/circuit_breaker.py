@@ -1,9 +1,10 @@
-import logging
 from typing import Callable, Any, Optional
 from functools import wraps
 import time
 from enum import Enum
-from contract_engine.error_handling import health_monitor, ErrorSeverity
+from swisper_core.errors import ErrorSeverity
+from swisper_core.monitoring import health_monitor
+from swisper_core import get_logger
 
 class CircuitState(Enum):
     CLOSED = "closed"
@@ -19,7 +20,7 @@ class RedisCircuitBreaker:
         self.failure_count = 0
         self.last_failure_time = None
         self.state = CircuitState.CLOSED
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
     
     def __call__(self, func: Callable) -> Callable:
         @wraps(func)

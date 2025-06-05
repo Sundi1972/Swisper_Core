@@ -1,13 +1,14 @@
 import pytest
+import os
 from unittest.mock import patch, MagicMock
-from contract_engine.unified_session_store import UnifiedSessionStore
+from swisper_core.session import UnifiedSessionStore
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 def test_atomic_state_save_with_rollback():
     """Test atomic state saving with rollback on failure"""
     store = UnifiedSessionStore()
-    fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
     fsm.context = SwisperContext(session_id="test", current_state="refine_constraints")
     
     with patch.object(store, '_save_to_postgres_atomic') as mock_save:
@@ -20,7 +21,7 @@ def test_atomic_state_save_with_rollback():
 def test_search_to_refine_constraints_persistence():
     """Specifically test the problematic state transition"""
     store = UnifiedSessionStore()
-    fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
     fsm.context = SwisperContext(session_id="test", current_state="search")
     
     fsm.context.update_state("refine_constraints")
@@ -68,7 +69,7 @@ def test_fsm_state_validation():
     """Test FSM state validation"""
     store = UnifiedSessionStore()
     
-    fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
     fsm.context = SwisperContext(session_id="test", current_state="search")
     assert store._validate_fsm_state(fsm) is True
     

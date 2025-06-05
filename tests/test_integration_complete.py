@@ -7,7 +7,7 @@ verifying the clean separation between FSM (control plane) and Pipelines (data p
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 from contract_engine.pipelines.product_search_pipeline import create_product_search_pipeline
 from contract_engine.pipelines.preference_match_pipeline import create_preference_match_pipeline
 from orchestrator.core import handle
@@ -62,7 +62,8 @@ class TestCompleteIntegration:
         """Test complete purchase flow including constraint refinement loop"""
         session_id = "integration_complete_001"
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         fsm.product_search_pipeline = mock_search_pipeline
         fsm.preference_match_pipeline = mock_preference_pipeline
         
@@ -135,7 +136,7 @@ class TestCompleteIntegration:
     
     def test_session_persistence_throughout_flow(self):
         """Test session persistence and recovery throughout complete flow"""
-        from contract_engine.session_persistence import save_session_context, load_session_context
+        from swisper_core.session import save_session_context, load_session_context
         
         session_id = "integration_persistence_001"
         
@@ -183,13 +184,15 @@ class TestCompleteIntegration:
     
     def test_error_handling_throughout_flow(self):
         """Test error handling and fallback mechanisms throughout complete flow"""
-        from contract_engine.error_handling import health_monitor, OperationMode
+        from swisper_core.errors import OperationMode
+        from swisper_core.monitoring import health_monitor
         
         session_id = "integration_error_001"
         
         health_monitor.record_service_failure("openai_api", "API timeout")
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(
             session_id=session_id,
             product_query="laptop",
@@ -223,13 +226,14 @@ class TestCompleteIntegration:
     
     def test_performance_monitoring_integration(self):
         """Test performance monitoring throughout complete flow"""
-        from contract_engine.performance_monitor import PerformanceMonitor
+        from swisper_core.monitoring import PerformanceMonitor
         
         PerformanceMonitor.clear_metrics()
         
         session_id = "integration_perf_001"
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(
             session_id=session_id,
             product_query="laptop",
@@ -269,7 +273,7 @@ class TestCompleteIntegration:
     
     def test_pipeline_caching_effectiveness(self):
         """Test that pipeline caching improves performance on repeated operations"""
-        from contract_engine.performance_monitor import attribute_cache, pipeline_cache
+        from swisper_core.monitoring import attribute_cache, pipeline_cache
         
         attribute_cache.clear()
         pipeline_cache.clear()
@@ -303,7 +307,8 @@ class TestCompleteIntegration:
         search_pipeline = create_product_search_pipeline()
         preference_pipeline = create_preference_match_pipeline()
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         fsm.product_search_pipeline = search_pipeline
         fsm.preference_match_pipeline = preference_pipeline
         

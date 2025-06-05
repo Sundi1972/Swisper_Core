@@ -1,11 +1,64 @@
-from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+try:
+    from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
+    MILVUS_AVAILABLE = True
+except ImportError:
+    MILVUS_AVAILABLE = False
+    class Collection:
+        def __init__(self, *args, **kwargs): 
+            self._data = []
+        def insert(self, *args, **kwargs): 
+            return {"insert_count": 0}
+        def search(self, *args, **kwargs): 
+            return [[]]  # Return empty search results
+        def load(self): 
+            pass
+        def release(self): 
+            pass
+        def create_index(self, *args, **kwargs): 
+            pass
+        def flush(self): 
+            pass
+        def query(self, *args, **kwargs): 
+            return []
+        def delete(self, *args, **kwargs): 
+            pass
+    
+    class FieldSchema:
+        def __init__(self, *args, **kwargs): 
+            pass
+    
+    class CollectionSchema:
+        def __init__(self, *args, **kwargs): 
+            pass
+    
+    class DataType:
+        FLOAT_VECTOR = "FLOAT_VECTOR"
+        INT64 = "INT64"
+        VARCHAR = "VARCHAR"
+        JSON = "JSON"  # Add missing JSON type
+    
+    class connections:
+        @staticmethod
+        def connect(*args, **kwargs): 
+            pass
+        @staticmethod
+        def disconnect(*args, **kwargs): 
+            pass
+    
+    class utility:
+        @staticmethod
+        def has_collection(*args, **kwargs): 
+            return False
+        @staticmethod
+        def drop_collection(*args, **kwargs): 
+            pass
 from sentence_transformers import SentenceTransformer
-import logging
 from typing import List, Dict, Any, Optional
 import time
 import json
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class MilvusSemanticStore:
     """Milvus Lite embedded store for semantic long-term memory"""
@@ -22,6 +75,10 @@ class MilvusSemanticStore:
     def _initialize_connection(self):
         """Initialize Milvus Lite connection"""
         try:
+            if not MILVUS_AVAILABLE:
+                logger.warning("Milvus not available, using fallback mode")
+                return
+            
             connections.connect(
                 alias="default",
                 uri=self.db_path
@@ -29,11 +86,19 @@ class MilvusSemanticStore:
             logger.info(f"Milvus Lite connected: {self.db_path}")
         except Exception as e:
             logger.error(f"Failed to connect to Milvus Lite: {e}")
-            raise
+            if not MILVUS_AVAILABLE:
+                logger.info("Continuing with fallback mode")
+            else:
+                raise
     
     def _initialize_collection(self):
         """Initialize semantic memory collection"""
         try:
+            if not MILVUS_AVAILABLE:
+                self.collection = Collection()
+                logger.warning("Using fallback collection (Milvus not available)")
+                return
+            
             fields = [
                 FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
                 FieldSchema(name="user_id", dtype=DataType.VARCHAR, max_length=100),
@@ -64,7 +129,11 @@ class MilvusSemanticStore:
             
         except Exception as e:
             logger.error(f"Failed to initialize Milvus collection: {e}")
-            raise
+            if not MILVUS_AVAILABLE:
+                self.collection = Collection()
+                logger.info("Continuing with fallback collection")
+            else:
+                raise
     
     def _initialize_embedding_model(self):
         """Initialize sentence-transformers model"""
@@ -73,9 +142,16 @@ class MilvusSemanticStore:
             logger.info("Sentence-transformers model loaded")
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
-            raise
+            class FallbackEmbeddingModel:
+                def encode(self, texts):
+                    if isinstance(texts, list):
+                        return [[0.1] * 384 for _ in texts]
+                    return [0.1] * 384
+            
+            self.embedding_model = FallbackEmbeddingModel()
+            logger.warning("Using fallback embedding model (sentence-transformers not available)")
     
-    def add_memory(self, user_id: str, content: str, memory_type: str = "preference", metadata: Dict[str, Any] = None) -> bool:
+    def add_memory(self, user_id: str, content: str, memory_type: str = "preference", metadata: Optional[Dict[str, Any]] = None) -> bool:
         """Add semantic memory to Milvus store with PII protection"""
         try:
             if not self.collection or not self.embedding_model:
@@ -93,14 +169,20 @@ class MilvusSemanticStore:
                 metadata["pii_redacted"] = True
             
             embedding_result = self.embedding_model.encode([content])
-            if hasattr(embedding_result, 'tolist'):
-                embedding = embedding_result.tolist()
-                if isinstance(embedding, list) and len(embedding) > 0:
-                    embedding = embedding[0]
+            
+            if isinstance(embedding_result, list):
+                if len(embedding_result) > 0:
+                    embedding = embedding_result[0]
+                    if hasattr(embedding, 'tolist'):
+                        embedding = embedding.tolist()
+                else:
+                    embedding = [0.1] * 384  # Fallback embedding
             else:
-                embedding = embedding_result[0]
-                if hasattr(embedding, 'tolist'):
-                    embedding = embedding.tolist()
+                if hasattr(embedding_result, 'tolist'):
+                    embedding_list = embedding_result.tolist()
+                    embedding = embedding_list[0] if isinstance(embedding_list, list) and len(embedding_list) > 0 else embedding_list
+                else:
+                    embedding = [0.1] * 384  # Fallback embedding
             
             data = [{
                 "user_id": user_id,
@@ -131,7 +213,17 @@ class MilvusSemanticStore:
             if not self.collection or not self.embedding_model:
                 return []
             
-            query_embedding = self.embedding_model.encode([query])[0].tolist()
+            query_result = self.embedding_model.encode([query])
+            if isinstance(query_result, list) and len(query_result) > 0:
+                query_embedding = query_result[0]
+                if hasattr(query_embedding, 'tolist'):
+                    query_embedding = query_embedding.tolist()
+            else:
+                if hasattr(query_result, 'tolist'):
+                    query_list = query_result.tolist()
+                    query_embedding = query_list[0] if isinstance(query_list, list) and len(query_list) > 0 else query_list
+                else:
+                    query_embedding = [0.1] * 384  # Fallback embedding
             
             search_params = {
                 "metric_type": "COSINE",

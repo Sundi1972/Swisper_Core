@@ -7,12 +7,13 @@ This pipeline handles the stateless data transformation for product search:
 3. Result Limiter (if ≤50 pass, else return too_many_results)
 """
 
-import logging
 from haystack.pipelines import Pipeline
 from ..haystack_components import MockGoogleShoppingComponent, AttributeAnalyzerComponent, ResultLimiterComponent
-from ..error_handling import handle_pipeline_error, create_fallback_product_search, health_monitor
+from swisper_core.errors import handle_pipeline_error
+from swisper_core.monitoring import health_monitor
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def create_product_search_pipeline() -> Pipeline:
     """
@@ -51,6 +52,7 @@ async def run_product_search(pipeline: Pipeline, query: str, hard_constraints: l
     try:
         if not health_monitor.is_service_available("product_search"):
             logger.warning("Product search service unavailable, using fallback")
+            from swisper_core.errors import create_fallback_product_search
             return create_fallback_product_search(query, max_results=50)
         
         result = pipeline.run(query=query)
@@ -68,6 +70,7 @@ async def run_product_search(pipeline: Pipeline, query: str, hard_constraints: l
         logger.error(f"Product search pipeline failed: {e}")
         
         def fallback():
+            from swisper_core.errors import create_fallback_product_search
             return create_fallback_product_search(query, max_results=50)
         
         return handle_pipeline_error(e, "product_search_pipeline", fallback)

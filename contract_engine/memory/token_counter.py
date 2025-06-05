@@ -1,6 +1,8 @@
 import tiktoken
 import logging
 from typing import List, Dict, Any, Union
+from swisper_core import get_logger
+
 
 class TokenCounter:
     """Token counting service using tiktoken"""
@@ -8,7 +10,7 @@ class TokenCounter:
     def __init__(self, model: str = "gpt-4o"):
         self.model = model
         self.encoding = tiktoken.encoding_for_model(model)
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
     
     def count_tokens(self, text: str) -> int:
         """Count tokens in a single text string"""

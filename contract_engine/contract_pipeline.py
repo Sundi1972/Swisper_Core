@@ -1,5 +1,7 @@
 from haystack.pipelines import Pipeline
 import logging
+from swisper_core import get_logger
+
 
 try:
     from .haystack_components import (
@@ -14,7 +16,7 @@ except ImportError:
         ProductSelectorComponent
     )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def create_product_selection_pipeline() -> Pipeline:
     pipeline = Pipeline()

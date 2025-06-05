@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from contract_engine.memory.memory_manager import MemoryManager
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 @patch('contract_engine.memory.memory_manager.BufferStore')
 @patch('contract_engine.memory.memory_manager.SummaryStore')

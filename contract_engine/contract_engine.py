@@ -8,17 +8,18 @@ import os # For makedirs
 
 # Import the real search function (with mock fallback)
 from tool_adapter.mock_google import google_shopping_search as search_product
-from .context import SwisperContext
+from swisper_core import SwisperContext, get_logger
 from .state_transitions import (
     StateTransition, ContractState, 
     create_success_transition, create_error_transition, 
     create_user_input_transition, create_completion_transition
 )
 from .pipelines.preference_match_pipeline import create_preference_match_pipeline, run_preference_match
-from .error_handling import (
-    health_monitor, get_degraded_operation_message, 
-    create_user_friendly_error_message, OperationMode
+from swisper_core.errors import (
+    OperationMode, create_user_friendly_error_message, 
+    handle_pipeline_error, get_degraded_operation_message
 )
+from swisper_core.monitoring import health_monitor
 from .session_persistence import (
     save_pipeline_execution, save_session_context, 
     load_session_context, session_manager
@@ -35,7 +36,7 @@ from .session_persistence import (
 class ContractStateMachine:
     def __init__(self, template_path, schema_path=None): # schema_path is not used in slimmed version but kept for signature
         self.template_path = template_path
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.contract = self.load_template()
 
         if not self.contract: # Handle case where template loading fails
@@ -397,8 +398,7 @@ class ContractStateMachine:
             try:
                 preference_analysis = analyze_user_preferences(
                     user_input, 
-                    self.context.product_query, 
-                    self.context.extracted_attributes
+                    self.context.search_results or []
                 )
                 
                 if isinstance(preference_analysis, dict):

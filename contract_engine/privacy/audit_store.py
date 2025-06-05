@@ -3,12 +3,47 @@ import json
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
 import gzip
 import io
+import logging
 
-logger = logging.getLogger(__name__)
+try:
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError
+    BOTO3_AVAILABLE = True
+except ImportError:
+    BOTO3_AVAILABLE = False
+    
+    class MockClientError(Exception):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.response = {'Error': {'Code': '404'}}
+    
+    class MockNoCredentialsError(Exception):
+        pass
+    
+    class MockS3Client:
+        def __init__(self, *args, **kwargs): pass
+        def head_bucket(self, **kwargs): pass
+        def create_bucket(self, **kwargs): pass
+        def put_object(self, **kwargs): pass
+        def get_paginator(self, operation_name): return MockPaginator()
+        def head_object(self, **kwargs): return {'Metadata': {}}
+        def delete_objects(self, **kwargs): return {'Deleted': []}
+    
+    class MockPaginator:
+        def paginate(self, **kwargs): return [{'Contents': []}]
+    
+    class MockBoto3:
+        @staticmethod
+        def client(*args, **kwargs): return MockS3Client()
+    
+    boto3 = MockBoto3()
+    ClientError = MockClientError
+    NoCredentialsError = MockNoCredentialsError
+
+from swisper_core import get_logger
+logger = get_logger(__name__)
 
 class S3AuditStore:
     """S3-based storage for auditable artifacts and GDPR compliance"""
@@ -21,6 +56,11 @@ class S3AuditStore:
     
     def _initialize_s3_client(self):
         """Initialize S3 client with Switzerland/EU configuration"""
+        if not BOTO3_AVAILABLE:
+            logger.warning("boto3 not available, using fallback mode")
+            self.s3_client = None
+            return
+            
         try:
             self.s3_client = boto3.client(
                 's3',
@@ -253,4 +293,11 @@ class S3AuditStore:
         
         return buffer.getvalue()
 
-audit_store = S3AuditStore()
+audit_store = None
+
+def get_audit_store():
+    """Get audit store instance with lazy initialization"""
+    global audit_store
+    if audit_store is None:
+        audit_store = S3AuditStore()
+    return audit_store

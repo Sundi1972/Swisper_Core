@@ -6,14 +6,15 @@ pipeline-based architecture, including pipeline state persistence and enhanced
 context serialization.
 """
 
-import logging
 import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
-from contract_engine.context import SwisperContext
-from contract_engine.error_handling import health_monitor, OperationMode
+from swisper_core.types import SwisperContext
+from swisper_core.errors import OperationMode
+from swisper_core.monitoring import health_monitor
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class PipelineSessionManager:
     """
@@ -32,7 +33,7 @@ class PipelineSessionManager:
         self.context_cache = {}
         
     def save_pipeline_state(self, session_id: str, pipeline_name: str, 
-                           pipeline_result: Dict[str, Any], execution_time: float = None) -> None:
+                           pipeline_result: Dict[str, Any], execution_time: Optional[float] = None) -> None:
         """
         Save pipeline execution state for session recovery.
         
@@ -94,7 +95,7 @@ class PipelineSessionManager:
             return None
     
     def save_enhanced_context(self, session_id: str, context: SwisperContext, 
-                            pipeline_metadata: Dict[str, Any] = None) -> None:
+                            pipeline_metadata: Optional[Dict[str, Any]] = None) -> None:
         """
         Save enhanced context with pipeline metadata.
         
@@ -256,7 +257,7 @@ class PipelineSessionManager:
             logger.error(f"Error during session cleanup: {e}")
             return 0
     
-    def _update_session_metrics(self, session_id: str, pipeline_name: str, execution_time: float = None) -> None:
+    def _update_session_metrics(self, session_id: str, pipeline_name: str, execution_time: Optional[float] = None) -> None:
         """Update session performance metrics."""
         try:
             if session_id not in self.session_metrics:
@@ -290,7 +291,7 @@ class PipelineSessionManager:
 
 session_manager = PipelineSessionManager()
 
-def save_pipeline_execution(session_id: str, pipeline_name: str, result: Dict[str, Any], execution_time: float = None) -> None:
+def save_pipeline_execution(session_id: str, pipeline_name: str, result: Dict[str, Any], execution_time: Optional[float] = None) -> None:
     """
     Convenience function to save pipeline execution state.
     
@@ -316,7 +317,7 @@ def get_cached_pipeline_result(session_id: str, pipeline_name: str) -> Optional[
     state = session_manager.get_pipeline_state(session_id, pipeline_name)
     return state.get("result") if state else None
 
-def save_session_context(session_id: str, context: SwisperContext, pipeline_metadata: Dict[str, Any] = None) -> None:
+def save_session_context(session_id: str, context: SwisperContext, pipeline_metadata: Optional[Dict[str, Any]] = None) -> None:
     """
     Convenience function to save enhanced session context.
     

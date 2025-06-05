@@ -1,9 +1,9 @@
-import logging
 from typing import List, Dict, Any, Optional
 import time
 from .redis_client import redis_client
 from .message_serializer import MessageSerializer
 from .token_counter import TokenCounter
+from swisper_core import get_logger
 
 class BufferStore:
     """Redis Lists-based ephemeral buffer for 30-message/4k token storage"""
@@ -14,7 +14,7 @@ class BufferStore:
         self.ttl_seconds = ttl_seconds
         self.serializer = MessageSerializer()
         self.token_counter = TokenCounter()
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
     
     def _get_buffer_key(self, session_id: str) -> str:
         """Generate Redis key for session buffer"""

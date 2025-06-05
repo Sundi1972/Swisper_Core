@@ -1,15 +1,16 @@
 import pytest
+import os
 from unittest.mock import patch
-from contract_engine.unified_session_store import UnifiedSessionStore
+from swisper_core.session import UnifiedSessionStore
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 def test_complete_purchase_flow_with_persistence():
     """Test full user flow: search → refine → recommend → purchase"""
     session_id = "integration_test_001"
     store = UnifiedSessionStore()
     
-    fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
     fsm.context = SwisperContext(session_id=session_id, current_state="search")
     
     states_to_test = ["search", "refine_constraints", "match_preferences", "confirm_purchase"]
@@ -42,7 +43,7 @@ def test_infinite_loop_fix_verification():
         
         mock_save.return_value = True
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(session_id=session_id, current_state="search")
         
         mock_get.return_value = fsm.context.to_dict()
@@ -72,7 +73,7 @@ def test_session_recovery_after_interruption():
         
         mock_save.return_value = True
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(
             session_id=session_id, 
             current_state="match_preferences",
@@ -97,7 +98,7 @@ def test_state_transition_atomicity():
     session_id = "atomicity_test"
     store = UnifiedSessionStore()
     
-    fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
     fsm.context = SwisperContext(session_id=session_id, current_state="search")
     
     with patch.object(store, '_save_to_postgres_atomic') as mock_save:
@@ -114,7 +115,7 @@ def test_concurrent_session_access():
     
     sessions = []
     for i in range(3):
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(
             session_id=f"concurrent_test_{i}", 
             current_state=["search", "refine_constraints", "match_preferences"][i]
@@ -147,7 +148,7 @@ def test_performance_under_load():
         mock_save.return_value = True
         
         for i in range(10):
-            fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+            fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
             fsm.context = SwisperContext(session_id=f"perf_test_{i}", current_state="search")
             
             mock_get.return_value = fsm.context.to_dict()

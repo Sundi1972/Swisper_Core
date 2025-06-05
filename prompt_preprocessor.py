@@ -2,10 +2,10 @@ import re
 import datetime
 import emoji # For stripping emojis
 from langdetect import detect, LangDetectException # For language detection
-import logging
+from swisper_core import get_logger
 
 # Configure logger for this module
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def clean_and_tag(raw: str, user_id="anon") -> dict:
     original_text = raw

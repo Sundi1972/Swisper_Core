@@ -70,7 +70,7 @@ tests/
 import pytest
 from unittest.mock import Mock, AsyncMock
 from contract_engine.fsm import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 class TestFSMStateHandlers:
     @pytest.fixture
@@ -215,7 +215,7 @@ class TestBufferStore:
 import pytest
 from haystack_pipeline.pipelines import create_product_search_pipeline, create_preference_match_pipeline
 from contract_engine.fsm import ContractStateMachine
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 class TestPipelineIntegration:
     @pytest.fixture
@@ -266,7 +266,7 @@ class TestPipelineIntegration:
 ```python
 import pytest
 from orchestrator.session_manager import PipelineSessionManager
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 from memory_manager.models import PipelineExecution
 
 class TestSessionPersistence:
@@ -670,7 +670,7 @@ def sample_products():
 @pytest.fixture
 async def test_session_context():
     """Test session context with sample data"""
-    from contract_engine.context import SwisperContext
+    from swisper_core import SwisperContext
     return SwisperContext(
         session_id="test_session_001",
         user_id="test_user_001",

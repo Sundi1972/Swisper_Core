@@ -1,20 +1,51 @@
-import redis
 import logging
 from typing import Optional, Any
 import os
-from .circuit_breaker import redis_circuit_breaker
+from swisper_core import get_logger
+
+
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+    
+    class MockRedis:
+        def __init__(self, *args, **kwargs): pass
+        def ping(self): pass
+        def info(self): return {}
+    
+    class MockConnectionPool:
+        def __init__(self, *args, **kwargs): pass
+    
+    class MockRedisModule:
+        Redis = MockRedis
+        ConnectionPool = MockConnectionPool
+    
+    redis = MockRedisModule()
+
+try:
+    from .circuit_breaker import redis_circuit_breaker
+except ImportError:
+    def redis_circuit_breaker(func):
+        return func
 
 class RedisClient:
     """Redis client with connection pooling and circuit breaker"""
     
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self._pool = None
         self._client = None
         self._initialize_connection()
     
     def _initialize_connection(self):
         """Initialize Redis connection with pooling"""
+        if not REDIS_AVAILABLE:
+            self.logger.warning("Redis not available, using fallback mode")
+            self._client = None
+            return
+            
         try:
             redis_host = os.getenv("REDIS_HOST", "localhost")
             redis_port = int(os.getenv("REDIS_PORT", "6379"))
@@ -40,7 +71,7 @@ class RedisClient:
             self._client = None
     
     @redis_circuit_breaker
-    def get_client(self) -> redis.Redis:
+    def get_client(self):
         """Get Redis client with circuit breaker protection"""
         if self._client is None:
             self._initialize_connection()
@@ -59,7 +90,7 @@ class RedisClient:
         except:
             return False
     
-    def get_info(self) -> dict:
+    def get_info(self):
         """Get Redis server info for monitoring"""
         try:
             client = self.get_client()

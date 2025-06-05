@@ -5,8 +5,9 @@ import logging
 # Assuming tool_adapter is in PYTHONPATH.
 # If repository root is in PYTHONPATH:
 from tool_adapter.mock_google import google_shopping_search as search_fn
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class MockGoogleShoppingComponent(BaseComponent):
     outgoing_edges = 1 # Number of output connections
@@ -129,14 +130,14 @@ class AttributeAnalyzerComponent(BaseComponent):
     
     def __init__(self):
         super().__init__()
-        from .performance_monitor import attribute_cache, timed_operation
+        from swisper_core.monitoring import attribute_cache, timed_operation
         self._cache = attribute_cache
         self._timed_operation = timed_operation
     
     def run(self, products: List[Dict[str, Any]], product_query: str = None) -> Tuple[Dict[str, Any], str]:
         logger.info(f"AttributeAnalyzerComponent analyzing {len(products)} products for query: {product_query}")
         
-        from .performance_monitor import PipelineTimer, create_cache_key
+        from swisper_core.monitoring import PipelineTimer, create_cache_key
         
         with PipelineTimer("attribute_analysis"):
             try:

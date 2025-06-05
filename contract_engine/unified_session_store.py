@@ -1,14 +1,13 @@
-import logging
 from typing import Optional, Dict, Any
 from collections import defaultdict
 import time
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext, get_logger
 
 class UnifiedSessionStore:
     """High-performance single source of truth for FSM session persistence"""
     
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self._cache = {}
         self._cache_timestamps = {}
         self._cache_ttl = 300  # 5 minutes TTL

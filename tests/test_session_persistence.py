@@ -6,13 +6,13 @@ Tests pipeline state persistence, enhanced context serialization, and session cl
 import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
-from contract_engine.session_persistence import (
+from swisper_core.session import (
     PipelineSessionManager, session_manager,
     save_pipeline_execution, get_cached_pipeline_result,
     save_session_context, load_session_context,
     get_session_performance_metrics, cleanup_old_sessions
 )
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 
 class TestPipelineSessionManager:

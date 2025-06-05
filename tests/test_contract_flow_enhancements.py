@@ -1,4 +1,5 @@
 import pytest
+import os
 from unittest.mock import patch, MagicMock
 from contract_engine.contract_engine import ContractStateMachine
 from contract_engine.llm_helpers import generate_product_recommendation
@@ -6,7 +7,7 @@ from contract_engine.llm_helpers import generate_product_recommendation
 class TestContractFlowEnhancements:
     def test_filter_criteria_persistence(self):
         """Test that filter criteria are properly stored in contract parameters"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "GPU", "session_id": "test"})
         
         with patch('contract_engine.llm_helpers.analyze_user_preferences') as mock_analyze:
@@ -58,7 +59,7 @@ class TestContractFlowEnhancements:
 
     def test_top_5_product_ranking(self):
         """Test that rank_and_select returns top 5 products"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         
         products = [
             {"name": f"GPU {i}", "price": 1000 + i*100, "rating": 4.0 + i*0.1}
@@ -81,7 +82,7 @@ class TestContractFlowEnhancements:
             "recommendation": {"choice": 1, "reasoning": "Best performance"}
         }
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "GPU", "session_id": "test"})
         
         fsm.context.search_results = [
@@ -103,7 +104,7 @@ class TestContractFlowEnhancements:
 
     def test_recommendation_acceptance(self):
         """Test accepting LLM recommendation with 'yes'"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "GPU", "session_id": "test"})
         
         fsm.context.product_recommendations = {
@@ -122,7 +123,7 @@ class TestContractFlowEnhancements:
 
     def test_invalid_selection_handling(self):
         """Test handling of invalid user selections"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.context.top_products = [{"name": "RTX 4090"}, {"name": "RTX 4080"}]
         fsm.context.update_state("confirm_selection")
         
@@ -154,7 +155,7 @@ class TestContractFlowEnhancements:
             "recommendation": {"choice": 1, "reasoning": "Best performance"}
         }
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "GPU", "session_id": "test"})
         
         fsm.context.update_state("search")
@@ -167,7 +168,7 @@ class TestContractFlowEnhancements:
 
     def test_empty_products_handling(self):
         """Test handling when no products are available"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         
         top_products = fsm.rank_and_select([])
         assert top_products == []
@@ -196,7 +197,7 @@ class TestContractFlowEnhancements:
 
     def test_contract_parameters_storage_verification(self):
         """Test that all filter criteria persist in contract parameters"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "laptop", "session_id": "test"})
         
         with patch('contract_engine.llm_helpers.analyze_user_preferences') as mock_analyze:
@@ -220,7 +221,7 @@ class TestContractFlowEnhancements:
 
     def test_fewer_than_5_products_handling(self):
         """Test handling when search returns fewer than 5 products"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "GPU", "session_id": "test"})
         
         products = [
@@ -252,7 +253,7 @@ class TestContractFlowEnhancements:
 
     def test_no_search_results_handling(self):
         """Test graceful handling when no search results are found"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "nonexistent_product", "session_id": "test"})
         
         fsm.context.search_results = []
@@ -264,7 +265,7 @@ class TestContractFlowEnhancements:
 
     def test_single_product_handling(self):
         """Test handling when only one product is found"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "GPU", "session_id": "test"})
         
         products = [{"name": "RTX 4090", "price": 1599, "rating": 4.8}]
@@ -288,7 +289,7 @@ class TestContractFlowEnhancements:
 
     def test_numbered_selection_boundary_cases(self):
         """Test boundary cases for numbered selection"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.context.top_products = [
             {"name": "Product 1", "price": 100},
             {"name": "Product 2", "price": 200}
@@ -306,7 +307,7 @@ class TestContractFlowEnhancements:
 
     def test_washing_machine_constraint_extraction(self):
         """Test constraint extraction for washing machine specific requirements"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "washing machine", "session_id": "test"})
         
         mock_washing_machines = [
@@ -435,7 +436,7 @@ class TestContractFlowEnhancements:
 
     def test_preference_extraction_data_validation(self):
         """Test validation of extracted preference data structure"""
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         fsm.fill_parameters({"product": "laptop", "session_id": "test"})
         
         with patch('contract_engine.llm_helpers.analyze_user_preferences') as mock_analyze:

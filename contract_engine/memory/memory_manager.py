@@ -1,11 +1,10 @@
-import logging
 from typing import Dict, List, Any, Optional
 import time
 from .buffer_store import BufferStore
 from .summary_store import SummaryStore
 from .token_counter import TokenCounter
 from .redis_client import redis_client
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext, get_logger
 from .milvus_store import milvus_semantic_store
 
 class MemoryManager:
@@ -22,7 +21,7 @@ class MemoryManager:
         self.summary_store = SummaryStore()
         self.token_counter = TokenCounter()
         self.summary_trigger_tokens = summary_trigger_tokens
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         
         self._session_configs = {}
     

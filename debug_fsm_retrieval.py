@@ -1,4 +1,5 @@
 import sys
+import os
 sys.path.append('.')
 
 from orchestrator import session_store
@@ -36,7 +37,7 @@ def debug_fsm_retrieval():
     
     print("4. Creating fresh FSM for comparison...")
     try:
-        fresh_fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        fresh_fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
         print(f"   Fresh FSM type: {type(fresh_fsm)}")
         print(f"   Fresh FSM has 'next': {hasattr(fresh_fsm, 'next')}")
         print(f"   Fresh FSM context type: {type(fresh_fsm.context)}")

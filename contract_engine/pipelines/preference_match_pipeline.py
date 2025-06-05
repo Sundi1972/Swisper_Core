@@ -7,12 +7,13 @@ This pipeline handles the stateless data transformation for preference matching:
 3. PreferenceRanker Component (soft prefs → LLM score 0-1, return top 3)
 """
 
-import logging
 from haystack.pipelines import Pipeline
 from ..haystack_components import SpecScraperComponent, CompatibilityCheckerComponent, PreferenceRankerComponent
-from ..error_handling import handle_pipeline_error, create_fallback_preference_ranking, health_monitor
+from swisper_core.errors import handle_pipeline_error
+from swisper_core.monitoring import health_monitor
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def create_preference_match_pipeline(top_k: int = 3) -> Pipeline:
     """
@@ -70,6 +71,7 @@ async def run_preference_match(pipeline: Pipeline, products: list, preferences: 
         
         if not health_monitor.is_service_available("openai_api"):
             logger.warning("OpenAI API unavailable, using fallback preference ranking")
+            from swisper_core.errors import create_fallback_preference_ranking
             return create_fallback_preference_ranking(products, preferences)
         
         try:
@@ -112,6 +114,7 @@ async def run_preference_match(pipeline: Pipeline, products: list, preferences: 
         logger.error(f"Preference match pipeline failed: {e}")
         
         def fallback():
+            from swisper_core.errors import create_fallback_preference_ranking
             return create_fallback_preference_ranking(products, preferences)
         
         return handle_pipeline_error(e, "preference_match_pipeline", fallback)

@@ -7,8 +7,8 @@ context saving, and session recovery.
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from contract_engine.contract_engine import ContractStateMachine
-from contract_engine.context import SwisperContext
-from contract_engine.session_persistence import session_manager, save_session_context, load_session_context
+from swisper_core import SwisperContext
+from swisper_core.session import session_manager, save_session_context, load_session_context
 from orchestrator import core as orchestrator_core
 
 
@@ -19,7 +19,8 @@ class TestSessionIntegration:
         """Test complete FSM session with pipeline persistence"""
         session_id = "integration_fsm_001"
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(
             session_id=session_id,
             product_query="gaming laptop",
@@ -90,7 +91,7 @@ class TestSessionIntegration:
     
     def test_session_cleanup_functionality(self):
         """Test session cleanup functionality"""
-        from contract_engine.session_persistence import cleanup_old_sessions
+        from swisper_core.session import cleanup_old_sessions
         
         result = cleanup_old_sessions(max_age_hours=24)
         assert isinstance(result, int)
@@ -100,7 +101,8 @@ class TestSessionIntegration:
         """Test that FSM state transitions save enhanced context"""
         session_id = "integration_fsm_002"
         
-        fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+        import os
+        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "contract_templates", "purchase_item.yaml"))
         fsm.context = SwisperContext(
             session_id=session_id,
             product_query="test laptop",

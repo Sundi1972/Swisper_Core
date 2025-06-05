@@ -1,9 +1,9 @@
 from haystack.pipelines import Pipeline
 from haystack.nodes import TransformersSummarizer, PreProcessor
-import logging
 from typing import List, Dict, Any
+from swisper_core import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def create_rolling_summariser_pipeline() -> Pipeline:
     """Create T5-based map-reduce summarization pipeline for Switzerland hosting"""

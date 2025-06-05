@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import time
 from contract_engine.memory import MemoryManager, BufferStore, SummaryStore
-from contract_engine.context import SwisperContext
+from swisper_core import SwisperContext
 
 @patch('contract_engine.memory.redis_client.redis')
 def test_memory_integration_full_flow(mock_redis):

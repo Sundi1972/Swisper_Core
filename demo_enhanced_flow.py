@@ -24,7 +24,7 @@ def demo_enhanced_flow():
     from contract_engine.contract_engine import ContractStateMachine
     
     print("\n--- Demo 1: Enhanced flow with laptop search ---")
-    fsm1 = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm1 = ContractStateMachine(os.path.join(os.path.dirname(__file__), "contract_templates", "purchase_item.yaml"))
     fsm1.fill_parameters({
         "product": "laptop",
         "session_id": "demo_laptop_search",
@@ -44,7 +44,7 @@ def demo_enhanced_flow():
             print("✅ Enhanced flow - asking for clarification")
     
     print("\n--- Demo 2: Test with GPU search ---")
-    fsm2 = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm2 = ContractStateMachine(os.path.join(os.path.dirname(__file__), "contract_templates", "purchase_item.yaml"))
     fsm2.fill_parameters({
         "product": "GPU RTX 4090",
         "session_id": "demo_gpu_search",

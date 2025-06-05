@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from contract_engine.contract_engine import ContractStateMachine
 
 async def test_enhanced_flow():
-    fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
+    fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
     fsm.fill_parameters({
         "product": "GPU RTX 4090",
         "session_id": "test_enhanced_123",
