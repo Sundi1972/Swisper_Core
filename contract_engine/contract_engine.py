@@ -398,8 +398,7 @@ class ContractStateMachine:
             try:
                 preference_analysis = analyze_user_preferences(
                     user_input, 
-                    self.context.product_query, 
-                    self.context.extracted_attributes
+                    self.context.search_results or []
                 )
                 
                 if isinstance(preference_analysis, dict):
