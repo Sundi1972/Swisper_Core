@@ -11,7 +11,8 @@ packages = [
     {include = "gateway"},
     {include = "haystack_pipeline"},
     {include = "orchestrator"},
-    {include = "tool_adapter"}
+    {include = "tool_adapter"},
+    {include = "websearch_pipeline"}
 ]
 
 [tool.poetry.dependencies]
@@ -29,7 +30,7 @@ emoji = "^2.14.1"
 farm-haystack = "^1.26.4.post0"
 redis = "^5.0.0"
 nltk = "^3.8"
-sentencepiece = "^0.1.99"
+sentencepiece = "^0.2.0"
 psycopg2-binary = "^2.9.10"
 sqlalchemy = "^2.0.41"
 pymilvus = "^2.5.10"
@@ -37,6 +38,9 @@ sentence-transformers = "^4.1.0"
 spacy = "^3.7.0"
 cryptography = "^42.0.0"
 boto3 = "^1.35.0"
+torch = "^2.7.1"
+transformers = "^4.52.4"
+requests = "^2.32.3"
 setuptools = "^80.9.0"
 
 [tool.poetry.group.dev.dependencies]
@@ -44,8 +48,6 @@ pytest = "^8.3.5"
 pytest-asyncio = "^1.0.0"
 pylint = "^3.3.7"
 setuptools = "^80.9.0"
-torch = "^2.7.1"
-transformers = "^4.52.4"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

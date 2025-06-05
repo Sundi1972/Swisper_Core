@@ -18,6 +18,17 @@ except ImportError:
     create_product_search_pipeline = None
     create_preference_match_pipeline = None
 
+try:
+    from websearch_pipeline.websearch_pipeline import create_websearch_pipeline
+    WEBSEARCH_AVAILABLE = True
+    logging.getLogger(__name__).info("WebSearch pipeline imported successfully.")
+except ImportError:
+    logging.getLogger(__name__).warning("Failed to import WebSearch pipeline. WebSearch functionality will be disabled.")
+    WEBSEARCH_AVAILABLE = False
+    def create_websearch_pipeline():
+        """Dummy function to handle WebSearch unavailability."""
+        return None
+
 # Import RAG function
 try:
     from haystack_pipeline import ask_doc as ask_document_pipeline
@@ -55,6 +66,18 @@ except Exception as e:
     logger.error("Failed to initialize Product Selection Pipeline: %s", e, exc_info=True)
     PRODUCT_SELECTION_PIPELINE = None
 
+# Initialize WebSearch Pipeline
+try:
+    if WEBSEARCH_AVAILABLE:
+        WEBSEARCH_PIPELINE = create_websearch_pipeline()
+        logger.info("WebSearch Pipeline initialized successfully.")
+    else:
+        WEBSEARCH_PIPELINE = None
+        logger.info("WebSearch Pipeline not available due to import failure.")
+except Exception as e:
+    logger.error("Failed to initialize WebSearch Pipeline: %s", e, exc_info=True)
+    WEBSEARCH_PIPELINE = None
+
 # Initialize new pipeline architecture
 try:
     if create_product_search_pipeline and create_preference_match_pipeline:
@@ -69,7 +92,6 @@ except Exception as e:
     logger.error("Failed to initialize new pipeline architecture: %s", e, exc_info=True)
     PRODUCT_SEARCH_PIPELINE = None
     PREFERENCE_MATCH_PIPELINE = None
-
 class Message(BaseModel): 
     role: str
     content: str
@@ -215,6 +237,8 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         is_contract_intent = bool(PRODUCT_SELECTION_PIPELINE and re.search(contract_keywords, last_user_message_content, re.IGNORECASE))
         rag_trigger_keyword = "#rag"
         is_rag_intent = bool(last_user_message_content.lower().startswith(rag_trigger_keyword))
+        websearch_keywords = r"\b(today|latest|new|current|recent|2025|2024|now|who are|what is|when did|ministers|government|breaking|news)\b"
+        is_websearch_intent = bool(WEBSEARCH_PIPELINE and re.search(websearch_keywords, last_user_message_content, re.IGNORECASE))
         
         if is_contract_intent:
             intent_type = "contract"
@@ -222,6 +246,9 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         elif is_rag_intent:
             intent_type = "rag"
             parameters = {"rag_question": last_user_message_content[len(rag_trigger_keyword):].lstrip()}
+        elif is_websearch_intent:
+            intent_type = "websearch"
+            parameters = {"websearch_query": last_user_message_content}
         else:
             intent_type = "chat"
             parameters = {}
@@ -301,8 +328,33 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         else:
             reply_content = f"Contract template {contract_template} is not yet supported."
     
+    elif intent_type == "websearch":
+        # WebSearch Path - integrate with LLM intent extraction
+        logger.info("🔍 WebSearch path triggered", extra={"session_id": session_id, "websearch_query": last_user_message_content})
+        if WEBSEARCH_PIPELINE:
+            try:
+                pipeline_result = WEBSEARCH_PIPELINE.run(query=last_user_message_content)
+                summarizer_output = pipeline_result.get("LLMSummarizer", ({}, ''))
+                summary_data = summarizer_output[0] if isinstance(summarizer_output, tuple) else {}
+                
+                summary = summary_data.get("summary", "No current information found.")
+                sources = summary_data.get("sources", [])
+                
+                reply_content = summary
+                
+                if sources and len(sources) > 0:
+                    reply_content += f"\n\nSources: {', '.join(sources[:3])}"
+                    
+                logger.info("🔍 WebSearch response generated", extra={"session_id": session_id, "response_preview": reply_content[:100]})
+                
+            except Exception as e:
+                logger.error("Error running WebSearch Pipeline for session %s: %s", session_id, e, exc_info=True)
+                reply_content = "Sorry, there was an error searching for current information."
+        else:
+            reply_content = "WebSearch functionality is currently unavailable."
+    
     elif intent_type == "tool_usage":
-        logger.info("Tool usage path triggered for session %s. Input: '%s'", session_id, last_user_message_content)
+        logger.info("🔧 Tool usage path triggered", extra={"session_id": session_id, "user_input": last_user_message_content})
         tools_needed = parameters.get("tools_needed", [])
         if not isinstance(tools_needed, list):
             tools_needed = [tools_needed] if tools_needed else []
