@@ -1,6 +1,7 @@
 from haystack.pipelines import Pipeline
 from haystack.nodes import TransformersSummarizer, PreProcessor
 from typing import List, Dict, Any
+import os
 from swisper_core import get_logger
 
 logger = get_logger(__name__)
@@ -17,9 +18,11 @@ def create_rolling_summariser_pipeline() -> Pipeline:
         split_respect_sentence_boundary=True
     )
     
+    use_gpu = os.getenv("USE_GPU", "false").lower() == "true"
+    
     summarizer = TransformersSummarizer(
         model_name_or_path='t5-small',
-        use_gpu=False,
+        use_gpu=use_gpu,
         max_length=150,
         min_length=30,
         do_sample=False,
@@ -30,7 +33,7 @@ def create_rolling_summariser_pipeline() -> Pipeline:
     pipeline.add_node(component=preprocessor, name="TextSplitter", inputs=["Query"])
     pipeline.add_node(component=summarizer, name="Summarizer", inputs=["TextSplitter"])
     
-    logger.info("RollingSummariser Pipeline created successfully")
+    logger.info(f"RollingSummariser Pipeline created successfully (GPU: {use_gpu})")
     return pipeline
 
 def summarize_messages(messages: List[Dict[str, Any]]) -> str:
