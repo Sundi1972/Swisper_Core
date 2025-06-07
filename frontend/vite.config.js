@@ -8,6 +8,7 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: [
       'api-key-checker-tunnel-njnc2f4k.devinapps.com',
+      'code-checker-app-tunnel-2j7t5vs0.devinapps.com',
       'localhost',
       '127.0.0.1'
     ]
