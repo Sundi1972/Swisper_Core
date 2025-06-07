@@ -531,3 +531,87 @@ async def delete_user_memories(user_id: str, confirm_deletion: bool = False) -> 
     except Exception as e:
         logger.error("Error deleting user memories for %s: %s", user_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error deleting user memories: {str(e)}") from e
+
+@app.post("/api/test/t5-websearch")
+async def test_t5_websearch() -> Dict[str, Any]:
+    """Test T5 websearch summarization functionality"""
+    logger.info("Received request for POST /api/test/t5-websearch")
+    try:
+        from websearch_pipeline.websearch_components import LLMSummarizerComponent
+        
+        summarizer = LLMSummarizerComponent()
+        
+        test_results = [
+            {
+                "title": "Test GPU Configuration",
+                "snippet": "This is a test snippet about GPU configuration for T5 models.",
+                "link": "https://example.com/test1"
+            },
+            {
+                "title": "T5 Model Performance",
+                "snippet": "T5 models can run on both CPU and GPU for different performance characteristics.",
+                "link": "https://example.com/test2"
+            }
+        ]
+        
+        result, _ = summarizer.run(ranked_results=test_results, query="test T5 functionality")
+        
+        return {
+            "test_type": "t5_websearch",
+            "success": True,
+            "t5_available": summarizer.summarizer is not None,
+            "gpu_enabled": os.getenv("USE_GPU", "false").lower() == "true",
+            "summary": result.get("summary", ""),
+            "sources": result.get("sources", []),
+            "fallback_used": summarizer.summarizer is None
+        }
+        
+    except Exception as e:
+        logger.error("Error testing T5 websearch: %s", e, exc_info=True)
+        return {
+            "test_type": "t5_websearch",
+            "success": False,
+            "error": str(e),
+            "t5_available": False,
+            "gpu_enabled": False,
+            "fallback_used": True
+        }
+
+
+@app.post("/api/test/t5-memory")
+async def test_t5_memory() -> Dict[str, Any]:
+    """Test T5 rolling summarizer for memory management"""
+    logger.info("Received request for POST /api/test/t5-memory")
+    try:
+        from contract_engine.pipelines.rolling_summariser import summarize_messages
+        
+        test_messages = [
+            {"content": "I'm looking for a gaming laptop with good graphics performance."},
+            {"content": "My budget is around $1500 and I prefer NVIDIA graphics cards."},
+            {"content": "I also need at least 16GB RAM for development work."}
+        ]
+        
+        summary = summarize_messages(test_messages)
+        
+        return {
+            "test_type": "t5_memory",
+            "success": True,
+            "gpu_enabled": os.getenv("USE_GPU", "false").lower() == "true",
+            "summary": summary,
+            "message_count": len(test_messages),
+            "summary_length": len(summary) if summary else 0
+        }
+        
+    except Exception as e:
+        logger.error("Error testing T5 memory: %s", e, exc_info=True)
+        return {
+            "test_type": "t5_memory",
+            "success": False,
+            "error": str(e),
+            "gpu_enabled": False
+        }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -266,13 +266,15 @@ class LLMSummarizerComponent(BaseComponent):
         try:
             from haystack.nodes import TransformersSummarizer
             
+            use_gpu = os.getenv("USE_GPU", "false").lower() == "true"
+            
             self.summarizer = TransformersSummarizer(
                 model_name_or_path="t5-small",
-                use_gpu=False,  # CPU inference for consistency
+                use_gpu=use_gpu,
                 max_length=150,
                 min_length=50
             )
-            logger.info("T5 summarizer initialized successfully")
+            logger.info(f"T5 summarizer initialized successfully (GPU: {use_gpu})")
             
         except ImportError:
             logger.warning("TransformersSummarizer not available, falling back to simple concatenation")
@@ -315,6 +317,10 @@ class LLMSummarizerComponent(BaseComponent):
     def _generate_t5_summary(self, ranked_results: List[Dict[str, Any]], query: str) -> str:
         """Generate summary using T5 model"""
         try:
+            if not self.summarizer:
+                logger.warning("T5 summarizer not available, falling back to simple summary")
+                return self._generate_simple_summary(ranked_results, query)
+            
             combined_text = " ".join([
                 f"{result.get('title', '')}: {result.get('snippet', '')}"
                 for result in ranked_results[:6]
