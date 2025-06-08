@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
+import SettingsModal from './SettingsModal';
 
 interface Session {
   id: string;
@@ -28,6 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({
     chats: true
   });
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const fetchSessions = async () => {
     try {
@@ -193,7 +195,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="mt-auto">
+      <div className="mt-auto space-y-3">
         <Button
           onClick={() => onSectionSelect('feedback')}
           variant="outline"
@@ -202,7 +204,21 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           Feedback
         </Button>
+        
+        <Button
+          onClick={() => setShowSettingsModal(true)}
+          variant="outline"
+          color="primary"
+          className="w-full border-[#8f99ad] text-[#8f99ad] rounded-[21px] h-[42px] hover:bg-[#8f99ad] hover:text-white transition-colors"
+        >
+          ⚙️ Settings
+        </Button>
       </div>
+
+      <SettingsModal 
+        isOpen={showSettingsModal} 
+        onClose={() => setShowSettingsModal(false)} 
+      />
     </aside>
   );
 };
