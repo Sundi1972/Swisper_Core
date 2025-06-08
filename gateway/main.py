@@ -2,6 +2,7 @@
 import logging
 import os
 import json # Added import
+import yaml
 import asyncio
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -151,18 +152,6 @@ async def websocket_logs(websocket: WebSocket, level: str = "INFO"):
 # OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 # if not OPENAI_API_KEY:
 #    logger.warning("OPENAI_API_KEY environment variable not set. This might be an issue for downstream components.")
-
-if __name__ == "__main__":
-    # This block is for local development/debugging without Docker.
-    # Ensure PYTHONPATH includes the repository root when running this directly.
-    # Example: PYTHONPATH=$PYTHONPATH:$(pwd) python gateway/main.py (if in repo root)
-    # or set it in your IDE's run configuration.
-    logger.info("Starting Uvicorn server for local development...")
-    import uvicorn
-    # Note: uvicorn.run(app, ...) is more robust than uvicorn.run("main:app", ...) for some import scenarios.
-    # It directly uses the 'app' instance from the current module.
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level=log_level_str.lower())
-
 
 @app.get("/tools")
 async def get_tools():
@@ -610,6 +599,80 @@ async def test_t5_memory() -> Dict[str, Any]:
             "error": str(e),
             "gpu_enabled": False
         }
+
+
+@app.get("/contracts")
+async def get_contracts():
+    logger.info("Received request for GET /contracts")
+    try:
+        contracts_dir = "contract_templates"
+        if not os.path.exists(contracts_dir):
+            logger.error("Contract templates directory not found: '%s'", contracts_dir)
+            raise FileNotFoundError(f"Contract templates directory not found: {contracts_dir}")
+        
+        contracts = []
+        for filename in os.listdir(contracts_dir):
+            if filename.endswith('.yaml') or filename.endswith('.yml'):
+                filepath = os.path.join(contracts_dir, filename)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    contract_data = yaml.safe_load(f)
+                contracts.append({
+                    "filename": filename,
+                    "contract_type": contract_data.get("contract_type", "unknown"),
+                    "version": contract_data.get("version", "1.0"),
+                    "description": contract_data.get("description", "No description"),
+                    "content": contract_data
+                })
+        
+        return {"contracts": contracts}
+    except FileNotFoundError:
+        logger.error("Contract templates directory not found")
+        raise HTTPException(status_code=404, detail="Contract templates not found")
+    except Exception as e:
+        logger.error("Error loading contracts: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error loading contracts: {str(e)}")
+
+@app.get("/system/status")
+async def get_system_status():
+    logger.info("Received request for GET /system/status")
+    try:
+        status = {
+            "environment_variables": {
+                "USE_GPU": os.getenv("USE_GPU", "false"),
+                "OPENAI_API_KEY": "Set" if os.getenv("OPENAI_API_KEY") else "Not Set",
+                "SEARCHAPI_API_KEY": "Set" if os.getenv("SEARCHAPI_API_KEY") else "Not Set",
+                "SWISPER_MASTER_KEY": "Set" if os.getenv("SWISPER_MASTER_KEY") else "Not Set"
+            },
+            "system_status": {
+                "rag_available": False,
+                "t5_model_status": "Available with fallback",
+                "database_status": "Shelve (fallback mode)",
+                "mcp_server_status": "Running"
+            },
+            "performance_settings": {
+                "gpu_acceleration": os.getenv("USE_GPU", "false").lower() == "true",
+                "model_type": "t5-small",
+                "max_tokens": 150,
+                "inference_mode": "CPU" if os.getenv("USE_GPU", "false").lower() == "false" else "GPU"
+            },
+            "debug_logging": {
+                "log_level": "INFO",
+                "websocket_logging": "Enabled",
+                "file_logging": "Disabled",
+                "console_logging": "Enabled"
+            }
+        }
+        
+        try:
+            from haystack_pipeline.rag import ask_doc
+            status["system_status"]["rag_available"] = True
+        except ImportError:
+            status["system_status"]["rag_available"] = False
+            
+        return status
+    except Exception as e:
+        logger.error("Error getting system status: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting system status: {str(e)}")
 
 
 if __name__ == "__main__":
