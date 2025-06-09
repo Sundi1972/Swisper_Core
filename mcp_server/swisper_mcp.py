@@ -59,6 +59,16 @@ def create_mcp_server():
                         },
                         "required": ["products", "preferences"]
                     }
+                },
+                "websearch": {
+                    "description": "Search the web for current information using SearchAPI with T5 summarization",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Web search query"}
+                        },
+                        "required": ["query"]
+                    }
                 }
             }
         
@@ -77,6 +87,8 @@ def create_mcp_server():
                     return self._check_compatibility(arguments.get("products", []), arguments.get("constraints", {}), arguments.get("product_type"))
                 elif name == "filter_products_by_preferences":
                     return self._filter_products(arguments.get("products", []), arguments.get("preferences", []))
+                elif name == "websearch":
+                    return self._websearch(arguments.get("query", ""))
                 else:
                     return {"success": False, "error": f"Unknown tool: {name}"}
             except Exception as e:
@@ -130,6 +142,24 @@ def create_mcp_server():
                 }
             except Exception as e:
                 return {"success": False, "error": str(e), "filtered_products": products}
+        
+        def _websearch(self, query: str) -> Dict[str, Any]:
+            """Search the web using websearch pipeline"""
+            try:
+                from websearch_pipeline.websearch_pipeline import create_websearch_pipeline
+                pipeline = create_websearch_pipeline()
+                if pipeline:
+                    result = pipeline.run(query=query)
+                    return {
+                        "success": True,
+                        "summary": result.get("summary", "No information found."),
+                        "sources": result.get("sources", []),
+                        "query": query
+                    }
+                else:
+                    return {"success": False, "error": "WebSearch pipeline not available"}
+            except Exception as e:
+                return {"success": False, "error": str(e), "summary": ""}
     
     return SwisperMCPServer()
 
