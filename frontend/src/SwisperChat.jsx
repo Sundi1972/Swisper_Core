@@ -119,6 +119,81 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
     }
   };
 
+  const handleTestT5Websearch = async () => {
+    const originalInput = input;
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/test/t5-websearch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+
+      const data = await response.json();
+      
+      let testMessage = "🔍 **T5 WebSearch Test Results:**\n\n";
+      testMessage += `✅ **Success:** ${data.success}\n`;
+      testMessage += `🤖 **T5 Available:** ${data.t5_available}\n`;
+      testMessage += `⚡ **GPU Enabled:** ${data.gpu_enabled}\n`;
+      testMessage += `🔄 **Fallback Used:** ${data.fallback_used}\n\n`;
+      
+      if (data.success && data.summary) {
+        testMessage += `📝 **Summary:** ${data.summary}\n\n`;
+        testMessage += `🔗 **Sources:** ${data.sources?.join(', ') || 'None'}\n`;
+      }
+      
+      if (data.error) {
+        testMessage += `❌ **Error:** ${data.error}\n`;
+      }
+
+      setMessages(prev => [...prev, { role: "assistant", content: testMessage }]);
+    } catch (error) {
+      setMessages(prev => [...prev, { role: "assistant", content: "❌ T5 WebSearch test failed: " + error.message }]);
+    } finally {
+      setLoading(false);
+      setInput(originalInput);
+    }
+  };
+
+  const handleTestT5Memory = async () => {
+    const originalInput = input;
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/test/t5-memory", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+
+      const data = await response.json();
+      
+      let testMessage = "🧠 **T5 Memory Test Results:**\n\n";
+      testMessage += `✅ **Success:** ${data.success}\n`;
+      testMessage += `⚡ **GPU Enabled:** ${data.gpu_enabled}\n`;
+      testMessage += `📊 **Messages Processed:** ${data.message_count || 0}\n`;
+      testMessage += `📏 **Summary Length:** ${data.summary_length || 0} chars\n\n`;
+      
+      if (data.success && data.summary) {
+        testMessage += `📝 **Generated Summary:**\n${data.summary}\n`;
+      }
+      
+      if (data.error) {
+        testMessage += `❌ **Error:** ${data.error}\n`;
+      }
+
+      setMessages(prev => [...prev, { role: "assistant", content: testMessage }]);
+    } catch (error) {
+      setMessages(prev => [...prev, { role: "assistant", content: "❌ T5 Memory test failed: " + error.message }]);
+    } finally {
+      setLoading(false);
+      setInput(originalInput);
+    }
+  };
+
   const handleVoiceInput = () => {
     console.log('Voice mode activated');
   };
@@ -301,6 +376,24 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
           >
             <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </button>
+          <button 
+            onClick={handleTestT5Websearch}
+            className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
+            title="Test T5 WebSearch"
+          >
+            <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+          <button 
+            onClick={handleTestT5Memory}
+            className="h-[35px] w-[35px] border border-[#b6c2d1] rounded-[17px] flex items-center justify-center hover:bg-[#b6c2d1] hover:text-[#020305] transition-colors"
+            title="Test T5 Memory"
+          >
+            <svg className="h-5 w-5 text-[#b6c2d1]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
           </button>
           <button 

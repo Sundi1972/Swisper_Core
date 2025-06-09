@@ -43,6 +43,16 @@ def load_available_tools() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to load MCP tools: {e}")
         return {
+            "search_web": {
+                "description": "Search the web for current events, news, and general information using SearchAPI.io",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Web search query for current events, news, or general information"}
+                    },
+                    "required": ["query"]
+                }
+            },
             "search_products": {
                 "description": "Search for products using SearchAPI.io with fallback to mock data",
                 "parameters": {

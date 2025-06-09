@@ -2,6 +2,7 @@
 import logging
 import os
 import json # Added import
+import yaml
 import asyncio
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -152,48 +153,15 @@ async def websocket_logs(websocket: WebSocket, level: str = "INFO"):
 # if not OPENAI_API_KEY:
 #    logger.warning("OPENAI_API_KEY environment variable not set. This might be an issue for downstream components.")
 
-if __name__ == "__main__":
-    # This block is for local development/debugging without Docker.
-    # Ensure PYTHONPATH includes the repository root when running this directly.
-    # Example: PYTHONPATH=$PYTHONPATH:$(pwd) python gateway/main.py (if in repo root)
-    # or set it in your IDE's run configuration.
-    logger.info("Starting Uvicorn server for local development...")
-    import uvicorn
-    # Note: uvicorn.run(app, ...) is more robust than uvicorn.run("main:app", ...) for some import scenarios.
-    # It directly uses the 'app' instance from the current module.
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level=log_level_str.lower())
-
-
 @app.get("/tools")
 async def get_tools():
     logger.info("Received request for GET /tools")
     try:
-        # Correct path construction assuming this file (main.py) is in gateway/
-        # and TOOLS_JSON_PATH is relative to repository root.
-        # Docker WORKDIR is /app (which is the repo root), so TOOLS_JSON_PATH should be fine as is.
-        # For local execution: if running from gateway/, need to adjust.
-        # If running 'python -m gateway.main' from repo root, path is fine.
-        # If running 'python main.py' from gateway/, path needs '../'.
-        # The Docker setup is the primary target, so TOOLS_JSON_PATH = "orchestrator/tool_registry/tools.json" is best.
-        
-        # Simple check for local dev if path needs adjustment (basic heuristic)
-        # This is a bit of a hack for local dev; ideally, path management is more robust.
-        current_dir = os.getcwd()
         path_to_check = TOOLS_JSON_PATH
-        if "gateway" in current_dir.replace("\\", "/").split("/")[-1]: # If CWD is gateway
-             # This check is a bit fragile. For robust local dev, use absolute paths or env vars for config.
-             # Or ensure running from project root.
-            alt_path = os.path.join("..", TOOLS_JSON_PATH)
-            if os.path.exists(alt_path):
-                 path_to_check = alt_path
-
+        
         if not os.path.exists(path_to_check):
-            # Fallback if the above logic didn't find it, try the direct path (for Docker)
-            if os.path.exists(TOOLS_JSON_PATH):
-                 path_to_check = TOOLS_JSON_PATH
-            else:
-                logger.error("Tools file not found. Checked: '%s' and '%s'", path_to_check, TOOLS_JSON_PATH)
-                raise FileNotFoundError # Raise to be caught by the except block
+            logger.error("Tools file not found at: '%s'", path_to_check)
+            raise FileNotFoundError(f"Tools file not found at: {path_to_check}")
 
         with open(path_to_check, 'r', encoding='utf-8') as f:
             tools_data = json.load(f)
@@ -531,3 +499,161 @@ async def delete_user_memories(user_id: str, confirm_deletion: bool = False) -> 
     except Exception as e:
         logger.error("Error deleting user memories for %s: %s", user_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error deleting user memories: {str(e)}") from e
+
+@app.post("/api/test/t5-websearch")
+async def test_t5_websearch() -> Dict[str, Any]:
+    """Test T5 websearch summarization functionality"""
+    logger.info("Received request for POST /api/test/t5-websearch")
+    try:
+        from websearch_pipeline.websearch_components import LLMSummarizerComponent
+        
+        summarizer = LLMSummarizerComponent()
+        
+        test_results = [
+            {
+                "title": "Test GPU Configuration",
+                "snippet": "This is a test snippet about GPU configuration for T5 models.",
+                "link": "https://example.com/test1"
+            },
+            {
+                "title": "T5 Model Performance",
+                "snippet": "T5 models can run on both CPU and GPU for different performance characteristics.",
+                "link": "https://example.com/test2"
+            }
+        ]
+        
+        result, _ = summarizer.run(ranked_results=test_results, query="test T5 functionality")
+        
+        return {
+            "test_type": "t5_websearch",
+            "success": True,
+            "t5_available": summarizer.summarizer is not None,
+            "gpu_enabled": os.getenv("USE_GPU", "false").lower() == "true",
+            "summary": result.get("summary", ""),
+            "sources": result.get("sources", []),
+            "fallback_used": summarizer.summarizer is None
+        }
+        
+    except Exception as e:
+        logger.error("Error testing T5 websearch: %s", e, exc_info=True)
+        return {
+            "test_type": "t5_websearch",
+            "success": False,
+            "error": str(e),
+            "t5_available": False,
+            "gpu_enabled": False,
+            "fallback_used": True
+        }
+
+
+@app.post("/api/test/t5-memory")
+async def test_t5_memory() -> Dict[str, Any]:
+    """Test T5 rolling summarizer for memory management"""
+    logger.info("Received request for POST /api/test/t5-memory")
+    try:
+        from contract_engine.pipelines.rolling_summariser import summarize_messages
+        
+        test_messages = [
+            {"content": "I'm looking for a gaming laptop with good graphics performance."},
+            {"content": "My budget is around $1500 and I prefer NVIDIA graphics cards."},
+            {"content": "I also need at least 16GB RAM for development work."}
+        ]
+        
+        summary = summarize_messages(test_messages)
+        
+        return {
+            "test_type": "t5_memory",
+            "success": True,
+            "gpu_enabled": os.getenv("USE_GPU", "false").lower() == "true",
+            "summary": summary,
+            "message_count": len(test_messages),
+            "summary_length": len(summary) if summary else 0
+        }
+        
+    except Exception as e:
+        logger.error("Error testing T5 memory: %s", e, exc_info=True)
+        return {
+            "test_type": "t5_memory",
+            "success": False,
+            "error": str(e),
+            "gpu_enabled": False
+        }
+
+
+@app.get("/contracts")
+async def get_contracts():
+    logger.info("Received request for GET /contracts")
+    try:
+        contracts_dir = "contract_templates"
+        if not os.path.exists(contracts_dir):
+            logger.error("Contract templates directory not found: '%s'", contracts_dir)
+            raise FileNotFoundError(f"Contract templates directory not found: {contracts_dir}")
+        
+        contracts = []
+        for filename in os.listdir(contracts_dir):
+            if filename.endswith('.yaml') or filename.endswith('.yml'):
+                filepath = os.path.join(contracts_dir, filename)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    contract_data = yaml.safe_load(f)
+                contracts.append({
+                    "filename": filename,
+                    "contract_type": contract_data.get("contract_type", "unknown"),
+                    "version": contract_data.get("version", "1.0"),
+                    "description": contract_data.get("description", "No description"),
+                    "content": contract_data
+                })
+        
+        return {"contracts": contracts}
+    except FileNotFoundError:
+        logger.error("Contract templates directory not found")
+        raise HTTPException(status_code=404, detail="Contract templates not found")
+    except Exception as e:
+        logger.error("Error loading contracts: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error loading contracts: {str(e)}")
+
+@app.get("/system/status")
+async def get_system_status():
+    logger.info("Received request for GET /system/status")
+    try:
+        status = {
+            "environment_variables": {
+                "USE_GPU": os.getenv("USE_GPU", "false"),
+                "OPENAI_API_KEY": "Set" if os.getenv("OPENAI_API_KEY") else "Not Set",
+                "SEARCHAPI_API_KEY": "Set" if os.getenv("SEARCHAPI_API_KEY") else "Not Set",
+                "SWISPER_MASTER_KEY": "Set" if os.getenv("SWISPER_MASTER_KEY") else "Not Set"
+            },
+            "system_status": {
+                "rag_available": False,
+                "t5_model_status": "Available with fallback",
+                "database_status": "Shelve (fallback mode)",
+                "mcp_server_status": "Running"
+            },
+            "performance_settings": {
+                "gpu_acceleration": os.getenv("USE_GPU", "false").lower() == "true",
+                "model_type": "t5-small",
+                "max_tokens": 150,
+                "inference_mode": "CPU" if os.getenv("USE_GPU", "false").lower() == "false" else "GPU"
+            },
+            "debug_logging": {
+                "log_level": "INFO",
+                "websocket_logging": "Enabled",
+                "file_logging": "Disabled",
+                "console_logging": "Enabled"
+            }
+        }
+        
+        try:
+            from haystack_pipeline.rag import ask_doc
+            status["system_status"]["rag_available"] = True
+        except ImportError:
+            status["system_status"]["rag_available"] = False
+            
+        return status
+    except Exception as e:
+        logger.error("Error getting system status: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting system status: {str(e)}")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
