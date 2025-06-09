@@ -43,6 +43,16 @@ def load_available_tools() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to load MCP tools: {e}")
         return {
+            "search_web": {
+                "description": "Search the web for current events, news, and general information using SearchAPI.io",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Web search query for current events, news, or general information"}
+                    },
+                    "required": ["query"]
+                }
+            },
             "search_products": {
                 "description": "Search for products using SearchAPI.io with fallback to mock data",
                 "parameters": {
@@ -262,6 +272,8 @@ CRITICAL: Only use exact template names from the available list. Never invent ne
             intent_data["tools_needed"] = []
         if "extracted_query" not in intent_data:
             intent_data["extracted_query"] = user_message
+        elif intent_data["extracted_query"] == "?":
+            intent_data["extracted_query"] = user_message
         if "rag_question" not in intent_data:
             intent_data["rag_question"] = None
             
@@ -281,6 +293,29 @@ CRITICAL: Only use exact template names from the available list. Never invent ne
 
 def _create_chat_fallback(user_message: str, reason: str) -> Dict[str, Any]:
     """Create chat intent fallback for low confidence or error cases"""
+    
+    websearch_keywords = r"\b(today|latest|new|current|recent|2025|2024|now|who are|what is|when did|ministers|government|breaking|news)\b"
+    logger.info(f"🔍 DEBUG: Checking WebSearch keywords in '{user_message}' with pattern '{websearch_keywords}'")
+    match = re.search(websearch_keywords, user_message, re.IGNORECASE)
+    logger.info(f"🔍 DEBUG: Regex match result: {match}")
+    if match:
+        logger.info(f"🔍 WebSearch keywords detected in fallback, routing to websearch: {user_message}")
+        return {
+            "intent_type": "websearch",
+            "confidence": 0.7,
+            "contract_template": None,
+            "tools_needed": [],
+            "extracted_query": user_message,
+            "rag_question": None,
+            "parameters": {
+                "contract_template": None,
+                "tools_needed": [],
+                "extracted_query": user_message,
+                "rag_question": None
+            },
+            "reasoning": f"WebSearch fallback: detected time-sensitive keywords in '{user_message}'",
+            "fallback_reason": f"WebSearch keywords detected: {reason}"
+        }
     
     return {
         "intent_type": "chat",

@@ -16,6 +16,16 @@ def create_mcp_server():
     class SwisperMCPServer:
         def __init__(self):
             self.tools = {
+                "search_web": {
+                    "description": "Search the web for current events, news, and general information using SearchAPI.io",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Web search query for current events, news, or general information"}
+                        },
+                        "required": ["query"]
+                    }
+                },
                 "search_products": {
                     "description": "Search for products using SearchAPI.io with fallback to mock data",
                     "parameters": {
@@ -59,6 +69,16 @@ def create_mcp_server():
                         },
                         "required": ["products", "preferences"]
                     }
+                },
+                "websearch": {
+                    "description": "Search the web for current information using SearchAPI with T5 summarization",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Web search query"}
+                        },
+                        "required": ["query"]
+                    }
                 }
             }
         
@@ -69,7 +89,9 @@ def create_mcp_server():
         def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             """Call a specific tool"""
             try:
-                if name == "search_products":
+                if name == "search_web":
+                    return self._search_web(arguments.get("query", ""))
+                elif name == "search_products":
                     return self._search_products(arguments.get("query", ""))
                 elif name == "analyze_product_attributes":
                     return self._analyze_attributes(arguments.get("products", []), arguments.get("product_type"))
@@ -77,10 +99,26 @@ def create_mcp_server():
                     return self._check_compatibility(arguments.get("products", []), arguments.get("constraints", {}), arguments.get("product_type"))
                 elif name == "filter_products_by_preferences":
                     return self._filter_products(arguments.get("products", []), arguments.get("preferences", []))
+                elif name == "websearch":
+                    return self._websearch(arguments.get("query", ""))
                 else:
                     return {"success": False, "error": f"Unknown tool: {name}"}
             except Exception as e:
                 return {"success": False, "error": str(e)}
+        
+        def _search_web(self, query: str) -> Dict[str, Any]:
+            """Search the web using SearchAPI for current events and general information"""
+            try:
+                from tool_adapter.searchapi import searchapi_web_search
+                results = searchapi_web_search(query)
+                return {
+                    "success": True,
+                    "results": results,
+                    "count": len(results) if results else 0,
+                    "query": query
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e), "results": [], "query": query}
         
         def _search_products(self, query: str) -> Dict[str, Any]:
             """Search for products using SearchAPI"""
@@ -130,6 +168,24 @@ def create_mcp_server():
                 }
             except Exception as e:
                 return {"success": False, "error": str(e), "filtered_products": products}
+        
+        def _websearch(self, query: str) -> Dict[str, Any]:
+            """Search the web using websearch pipeline"""
+            try:
+                from websearch_pipeline.websearch_pipeline import create_websearch_pipeline
+                pipeline = create_websearch_pipeline()
+                if pipeline:
+                    result = pipeline.run(query=query)
+                    return {
+                        "success": True,
+                        "summary": result.get("summary", "No information found."),
+                        "sources": result.get("sources", []),
+                        "query": query
+                    }
+                else:
+                    return {"success": False, "error": "WebSearch pipeline not available"}
+            except Exception as e:
+                return {"success": False, "error": str(e), "summary": ""}
     
     return SwisperMCPServer()
 

@@ -157,43 +157,35 @@ async def websocket_logs(websocket: WebSocket, level: str = "INFO"):
 async def get_tools():
     logger.info("Received request for GET /tools")
     try:
-        # Correct path construction assuming this file (main.py) is in gateway/
-        # and TOOLS_JSON_PATH is relative to repository root.
-        # Docker WORKDIR is /app (which is the repo root), so TOOLS_JSON_PATH should be fine as is.
-        # For local execution: if running from gateway/, need to adjust.
-        # If running 'python -m gateway.main' from repo root, path is fine.
-        # If running 'python main.py' from gateway/, path needs '../'.
-        # The Docker setup is the primary target, so TOOLS_JSON_PATH = "orchestrator/tool_registry/tools.json" is best.
+        from orchestrator.intent_extractor import load_available_tools
         
-        # Simple check for local dev if path needs adjustment (basic heuristic)
-        # This is a bit of a hack for local dev; ideally, path management is more robust.
-        current_dir = os.getcwd()
-        path_to_check = TOOLS_JSON_PATH
-        if "gateway" in current_dir.replace("\\", "/").split("/")[-1]: # If CWD is gateway
-             # This check is a bit fragile. For robust local dev, use absolute paths or env vars for config.
-             # Or ensure running from project root.
-            alt_path = os.path.join("..", TOOLS_JSON_PATH)
-            if os.path.exists(alt_path):
-                 path_to_check = alt_path
-
-        if not os.path.exists(path_to_check):
-            # Fallback if the above logic didn't find it, try the direct path (for Docker)
-            if os.path.exists(TOOLS_JSON_PATH):
-                 path_to_check = TOOLS_JSON_PATH
-            else:
-                logger.error("Tools file not found. Checked: '%s' and '%s'", path_to_check, TOOLS_JSON_PATH)
-                raise FileNotFoundError # Raise to be caught by the except block
-
-        with open(path_to_check, 'r', encoding='utf-8') as f:
-            tools_data = json.load(f)
-        return tools_data
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Tools definition file not found.") from exc
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail="Error reading tools definition.") from exc
+        mcp_tools = load_available_tools()
+        logger.info(f"Loaded {len(mcp_tools)} MCP tools: {list(mcp_tools.keys())}")
+        
+        return {"tools": mcp_tools}
     except Exception as e:
-        logger.error("An unexpected error occurred while fetching tools: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error while fetching tools.") from e
+        logger.error("Error loading MCP tools, falling back to static tools: %s", e, exc_info=True)
+        try:
+            path_to_check = TOOLS_JSON_PATH
+            
+            if not os.path.exists(path_to_check):
+                logger.error("Tools file not found at: '%s'", path_to_check)
+                raise FileNotFoundError(f"Tools file not found at: {path_to_check}")
+
+            with open(path_to_check, 'r', encoding='utf-8') as f:
+                tools_data = json.load(f)
+            
+            tools_dict = {}
+            for tool in tools_data:
+                tools_dict[tool["name"]] = {
+                    "description": tool["description"],
+                    "parameters": tool["parameters"]
+                }
+            
+            return {"tools": tools_dict}
+        except Exception as fallback_error:
+            logger.error("Fallback to static tools also failed: %s", fallback_error, exc_info=True)
+            raise HTTPException(status_code=500, detail="Unable to load tools from MCP server or static file") from fallback_error
 
 
 # Pydantic model for the /call endpoint's request body

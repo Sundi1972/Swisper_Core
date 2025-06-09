@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swisper WebSearch Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .demo-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        
+        .demo-section h3 {
+            margin-top: 0;
+            color: #444;
+        }
+        
+        .query-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        
+        .query-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .response-area {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            min-height: 100px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .loading {
+            color: #667eea;
+            font-style: italic;
+        }
+        
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }
+        
+        .sample-queries {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .sample-query {
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .sample-query:hover {
+            background: #dee2e6;
+        }
+        
+        .pipeline-info {
+            background: #e7f3ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .pipeline-info h4 {
+            margin-top: 0;
+            color: #0066cc;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .feature-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .feature-card h4 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-success { background: #28a745; }
+        .status-error { background: #dc3545; }
+        .status-loading { background: #ffc107; animation: pulse 1s infinite; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Swisper WebSearch Demo</h1>
+        <p class="subtitle">Intelligent External Knowledge Retrieval with T5 Summarization</p>
+        
+        <div class="pipeline-info">
+            <h4>🏗️ WebSearch Pipeline Architecture</h4>
+            <p><strong>SearchAPI.io</strong> → <strong>Deduplicate</strong> → <strong>SnippetFetcher</strong> → <strong>SimilarityRanker</strong> → <strong>T5 Summarizer</strong></p>
+            <p>Automatically detects time-sensitive queries and provides current information with privacy-compliant summarization.</p>
+        </div>
+        
+        <div class="demo-section">
+            <h3>🔍 WebSearch Demo</h3>
+            <p>Try queries with time-sensitive keywords like "today", "latest", "new", "current", "2025", etc.</p>
+            
+            <input type="text" id="websearchQuery" class="query-input" 
+                   placeholder="Enter your query (e.g., 'Who are the new German ministers 2025?')" 
+                   value="Who are the new German ministers 2025?">
+            
+            <div>
+                <button class="btn" onclick="executeWebSearch()">🔍 Execute WebSearch</button>
+                <button class="btn btn-secondary" onclick="loadSampleQueries()">📋 Load Sample Queries</button>
+            </div>
+            
+            <div class="sample-queries" id="sampleQueries"></div>
+            
+            <div id="websearchResponse" class="response-area">
+                Ready to demonstrate WebSearch functionality...
+            </div>
+        </div>
+        
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h4>🎯 Intent Detection</h4>
+                <p>Automatically routes time-sensitive queries to WebSearch pipeline using keyword detection and LLM classification.</p>
+                <p><strong>Keywords:</strong> today, latest, new, current, recent, 2025, ministers, government, breaking, news</p>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🔍 SearchAPI.io Integration</h4>
+                <p>Real-time web search with organic results filtering, deduplication by hostname, and relevance ranking.</p>
+                <p><strong>Features:</strong> Ad filtering, source deduplication, similarity ranking</p>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🇨🇭 T5 Summarization</h4>
+                <p>Local T5-small model for Switzerland hosting compliance with <200ms SLA performance.</p>
+                <p><strong>Benefits:</strong> Privacy-compliant, fast inference, no external AI dependencies</p>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🔧 Pipeline Integration</h4>
+                <p>Seamlessly integrated with existing Swisper architecture including contract engine and RAG systems.</p>
+                <p><strong>Compatibility:</strong> FSM continuation, session management, error handling</p>
+            </div>
+        </div>
+        
+        <div class="demo-section">
+            <h3>📊 System Status</h3>
+            <div id="systemStatus">
+                <p><span class="status-indicator status-loading"></span>Checking system status...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sampleQueries = [];
+        
+        // Load sample queries on page load
+        window.onload = function() {
+            loadSampleQueries();
+            checkSystemStatus();
+        };
+        
+        function loadSampleQueries() {
+            fetch('/api/test-queries')
+                .then(response => response.json())
+                .then(data => {
+                    sampleQueries = data.websearch_queries || [];
+                    displaySampleQueries();
+                })
+                .catch(error => {
+                    console.error('Error loading sample queries:', error);
+                });
+        }
+        
+        function displaySampleQueries() {
+            const container = document.getElementById('sampleQueries');
+            container.innerHTML = '';
+            
+            sampleQueries.forEach(query => {
+                const queryElement = document.createElement('div');
+                queryElement.className = 'sample-query';
+                queryElement.textContent = query;
+                queryElement.onclick = () => {
+                    document.getElementById('websearchQuery').value = query;
+                };
+                container.appendChild(queryElement);
+            });
+        }
+        
+        function executeWebSearch() {
+            const query = document.getElementById('websearchQuery').value.trim();
+            const responseArea = document.getElementById('websearchResponse');
+            
+            if (!query) {
+                responseArea.textContent = 'Please enter a query to search.';
+                responseArea.className = 'response-area error';
+                return;
+            }
+            
+            // Show loading state
+            responseArea.textContent = 'Executing WebSearch pipeline...\n\n🔍 Searching with SearchAPI.io\n📊 Processing results\n🧠 Generating T5 summary\n⏳ Please wait...';
+            responseArea.className = 'response-area loading';
+            
+            // Execute the WebSearch
+            fetch('/api/websearch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: query })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    responseArea.textContent = `Query: ${data.query}\n\nResponse:\n${data.response}\n\nSession ID: ${data.session_id}`;
+                    responseArea.className = 'response-area success';
+                } else {
+                    responseArea.textContent = `Error: ${data.error}`;
+                    responseArea.className = 'response-area error';
+                }
+            })
+            .catch(error => {
+                responseArea.textContent = `Network Error: ${error.message}`;
+                responseArea.className = 'response-area error';
+            });
+        }
+        
+        function checkSystemStatus() {
+            const statusArea = document.getElementById('systemStatus');
+            
+            fetch('/api/test-queries')
+                .then(response => response.json())
+                .then(data => {
+                    statusArea.innerHTML = `
+                        <p><span class="status-indicator status-success"></span>WebSearch Pipeline: Ready</p>
+                        <p><span class="status-indicator status-success"></span>SearchAPI.io Integration: Available</p>
+                        <p><span class="status-indicator status-success"></span>T5 Summarization: Loaded</p>
+                        <p><span class="status-indicator status-success"></span>Sample Queries: ${data.websearch_queries?.length || 0} loaded</p>
+                    `;
+                })
+                .catch(error => {
+                    statusArea.innerHTML = `
+                        <p><span class="status-indicator status-error"></span>System Status: Error connecting to backend</p>
+                        <p>Error: ${error.message}</p>
+                    `;
+                });
+        }
+        
+        // Allow Enter key to execute search
+        document.getElementById('websearchQuery').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeWebSearch();
+            }
+        });
+    </script>
+</body>
+</html>
