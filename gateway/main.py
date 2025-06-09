@@ -157,22 +157,35 @@ async def websocket_logs(websocket: WebSocket, level: str = "INFO"):
 async def get_tools():
     logger.info("Received request for GET /tools")
     try:
-        path_to_check = TOOLS_JSON_PATH
+        from orchestrator.intent_extractor import load_available_tools
         
-        if not os.path.exists(path_to_check):
-            logger.error("Tools file not found at: '%s'", path_to_check)
-            raise FileNotFoundError(f"Tools file not found at: {path_to_check}")
-
-        with open(path_to_check, 'r', encoding='utf-8') as f:
-            tools_data = json.load(f)
-        return tools_data
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Tools definition file not found.") from exc
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail="Error reading tools definition.") from exc
+        mcp_tools = load_available_tools()
+        logger.info(f"Loaded {len(mcp_tools)} MCP tools: {list(mcp_tools.keys())}")
+        
+        return {"tools": mcp_tools}
     except Exception as e:
-        logger.error("An unexpected error occurred while fetching tools: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error while fetching tools.") from e
+        logger.error("Error loading MCP tools, falling back to static tools: %s", e, exc_info=True)
+        try:
+            path_to_check = TOOLS_JSON_PATH
+            
+            if not os.path.exists(path_to_check):
+                logger.error("Tools file not found at: '%s'", path_to_check)
+                raise FileNotFoundError(f"Tools file not found at: {path_to_check}")
+
+            with open(path_to_check, 'r', encoding='utf-8') as f:
+                tools_data = json.load(f)
+            
+            tools_dict = {}
+            for tool in tools_data:
+                tools_dict[tool["name"]] = {
+                    "description": tool["description"],
+                    "parameters": tool["parameters"]
+                }
+            
+            return {"tools": tools_dict}
+        except Exception as fallback_error:
+            logger.error("Fallback to static tools also failed: %s", fallback_error, exc_info=True)
+            raise HTTPException(status_code=500, detail="Unable to load tools from MCP server or static file") from fallback_error
 
 
 # Pydantic model for the /call endpoint's request body
