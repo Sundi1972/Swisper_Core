@@ -10,6 +10,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Any, Dict, Optional # Added Dict here
 
+if not os.environ.get("OPENAI_API_KEY") and os.environ.get("OpenAI_API_Key"):
+    os.environ["OPENAI_API_KEY"] = os.environ["OpenAI_API_Key"]
+if not os.environ.get("SEARCHAPI_API_KEY") and os.environ.get("SearchAPI_API_Key"):
+    os.environ["SEARCHAPI_API_KEY"] = os.environ["SearchAPI_API_Key"]
+
 # CORS middleware
 from fastapi.middleware.cors import CORSMiddleware
 

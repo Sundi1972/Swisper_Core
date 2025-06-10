@@ -133,7 +133,7 @@ async def handle(messages: List[Message], session_id: str) -> Dict[str, Any]:
         last_user_message_content = last_user_message_pydantic.content
     logger.info(f"🔍 DEBUG: last_user_message_content = '{last_user_message_content}'")
     
-    session_store.add_chat_message(session_id, last_user_message_pydantic.model_dump())
+    session_store.add_chat_message(session_id, last_user_message_pydantic.dict())
 
     reply_content = "" # Initialize reply_content
 

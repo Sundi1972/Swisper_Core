@@ -149,26 +149,26 @@ def _generate_routing_manifest() -> Dict[str, Any]:
     return routing_manifest
 
 def extract_user_intent(user_message: str) -> Dict[str, Any]:
-    """Extract user intent using contract-aware routing with dedicated LLM classification"""
-    
+    """Extract user intent using LLM-first approach with regex fallback"""
     routing_manifest = _generate_routing_manifest()
     
     try:
         intent_result = _classify_intent_with_llm(user_message, routing_manifest)
         
         confidence = intent_result.get("confidence", 0.0)
-        if confidence < 0.6:
-            logger.warning(f"Low confidence {confidence}, falling back to chat")
-            return _create_chat_fallback(user_message, f"Low confidence classification: {confidence}")
+        logger.info(f"LLM classified intent as '{intent_result['intent_type']}' with confidence {confidence}")
+        logger.info(f"LLM reasoning: {intent_result.get('reasoning', 'No reasoning provided')}")
         
-        logger.info(f"Intent classified as '{intent_result['intent_type']}' with confidence {confidence}")
-        logger.info(f"Reasoning: {intent_result.get('reasoning', 'No reasoning provided')}")
+        if confidence < 0.6:
+            logger.warning(f"Low LLM confidence {confidence}, falling back to regex classification")
+            return _create_chat_fallback(user_message, f"Low LLM confidence: {confidence}")
         
         return intent_result
         
     except Exception as e:
-        logger.error(f"Intent classification failed: {e}")
-        return _create_chat_fallback(user_message, f"Classification error: {str(e)}")
+        logger.error(f"LLM intent classification failed: {e}")
+        logger.info("Falling back to regex-based classification")
+        return _create_chat_fallback(user_message, f"LLM unavailable: {str(e)}")
 
 def _classify_intent_with_llm(user_message: str, routing_manifest: Dict[str, Any]) -> Dict[str, Any]:
     """Use dedicated LLM to classify intent based on routing manifest"""
@@ -197,9 +197,10 @@ STRICT TEMPLATE SELECTION:
 
 CONFIDENCE SCORING:
 - 0.9-1.0: Very clear intent match with strong keywords
-- 0.7-0.9: Good intent match with supporting context
+- 0.7-0.9: Good intent match with supporting context  
 - 0.5-0.7: Reasonable intent match but some ambiguity
-- 0.0-0.5: Unclear or ambiguous intent
+- 0.3-0.5: Low confidence but still classifiable
+- 0.0-0.3: Unclear or ambiguous intent
 
 Respond with JSON in this exact format:
 {{
@@ -294,15 +295,58 @@ CRITICAL: Only use exact template names from the available list. Never invent ne
 def _create_chat_fallback(user_message: str, reason: str) -> Dict[str, Any]:
     """Create chat intent fallback for low confidence or error cases"""
     
-    websearch_keywords = r"\b(today|latest|new|current|recent|2025|2024|now|who are|what is|when did|ministers|government|breaking|news)\b"
+    if user_message.strip().startswith("#rag"):
+        rag_question = user_message.strip()[4:].strip()
+        logger.info(f"🔍 RAG prefix detected in fallback, routing to RAG: {user_message}")
+        return {
+            "intent_type": "rag",
+            "confidence": 0.95,
+            "contract_template": None,
+            "tools_needed": [],
+            "extracted_query": user_message,
+            "rag_question": rag_question,
+            "parameters": {
+                "contract_template": None,
+                "tools_needed": [],
+                "extracted_query": user_message,
+                "rag_question": rag_question
+            },
+            "reasoning": f"RAG fallback: detected #rag prefix in '{user_message}'",
+            "fallback_reason": f"RAG prefix detected: {reason}"
+        }
+    
+    purchase_keywords = r"\b(buy|purchase|order|acquire|shop for|find to buy|want to buy|looking for|need to buy|get me|buying|find me a|find a good|looking to get|need a new)\b"
+    logger.info(f"🔍 DEBUG: Checking Purchase contract keywords in '{user_message}' with pattern '{purchase_keywords}'")
+    purchase_match = re.search(purchase_keywords, user_message, re.IGNORECASE)
+    logger.info(f"🔍 DEBUG: Purchase regex match result: {purchase_match}")
+    if purchase_match:
+        logger.info(f"🔍 Purchase keywords detected in fallback, routing to contract: {user_message}")
+        return {
+            "intent_type": "contract",
+            "confidence": 0.85,
+            "contract_template": "purchase_item.yaml",
+            "tools_needed": [],
+            "extracted_query": user_message,
+            "rag_question": None,
+            "parameters": {
+                "contract_template": "purchase_item.yaml",
+                "tools_needed": [],
+                "extracted_query": user_message,
+                "rag_question": None
+            },
+            "reasoning": f"Contract fallback: detected purchase keywords '{purchase_match.group()}' in '{user_message}'",
+            "fallback_reason": f"Purchase keywords detected: {reason}"
+        }
+    
+    websearch_keywords = r"\b(latest|current|recent|2025|2024|breaking|news|search the web|ministers|government|politics|developments|events)\b"
     logger.info(f"🔍 DEBUG: Checking WebSearch keywords in '{user_message}' with pattern '{websearch_keywords}'")
-    match = re.search(websearch_keywords, user_message, re.IGNORECASE)
-    logger.info(f"🔍 DEBUG: Regex match result: {match}")
-    if match:
+    websearch_match = re.search(websearch_keywords, user_message, re.IGNORECASE)
+    logger.info(f"🔍 DEBUG: WebSearch regex match result: {websearch_match}")
+    if websearch_match:
         logger.info(f"🔍 WebSearch keywords detected in fallback, routing to websearch: {user_message}")
         return {
             "intent_type": "websearch",
-            "confidence": 0.7,
+            "confidence": 0.75,
             "contract_template": None,
             "tools_needed": [],
             "extracted_query": user_message,
@@ -313,13 +357,34 @@ def _create_chat_fallback(user_message: str, reason: str) -> Dict[str, Any]:
                 "extracted_query": user_message,
                 "rag_question": None
             },
-            "reasoning": f"WebSearch fallback: detected time-sensitive keywords in '{user_message}'",
+            "reasoning": f"WebSearch fallback: detected time-sensitive keywords '{websearch_match.group()}' in '{user_message}'",
             "fallback_reason": f"WebSearch keywords detected: {reason}"
+        }
+    
+    tool_keywords = r"\b(compare|check|analyze|filter|compatibility|specifications)\b"
+    tool_match = re.search(tool_keywords, user_message, re.IGNORECASE)
+    if tool_match:
+        logger.info(f"🔍 Tool keywords detected in fallback, routing to tool_usage: {user_message}")
+        return {
+            "intent_type": "tool_usage",
+            "confidence": 0.75,
+            "contract_template": None,
+            "tools_needed": [],
+            "extracted_query": user_message,
+            "rag_question": None,
+            "parameters": {
+                "contract_template": None,
+                "tools_needed": [],
+                "extracted_query": user_message,
+                "rag_question": None
+            },
+            "reasoning": f"Tool usage fallback: detected tool keywords '{tool_match.group()}' in '{user_message}'",
+            "fallback_reason": f"Tool keywords detected: {reason}"
         }
     
     return {
         "intent_type": "chat",
-        "confidence": 0.5,
+        "confidence": 0.7,
         "contract_template": None,
         "tools_needed": [],
         "extracted_query": user_message,
