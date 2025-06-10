@@ -157,18 +157,15 @@ def extract_user_intent(user_message: str) -> Dict[str, Any]:
         intent_result = _classify_intent_with_llm(user_message, routing_manifest)
         
         confidence = intent_result.get("confidence", 0.0)
-        if confidence < 0.6:
-            logger.warning(f"Low confidence {confidence}, falling back to chat")
-            return _create_chat_fallback(user_message, f"Low confidence classification: {confidence}")
-        
-        logger.info(f"Intent classified as '{intent_result['intent_type']}' with confidence {confidence}")
-        logger.info(f"Reasoning: {intent_result.get('reasoning', 'No reasoning provided')}")
+        logger.info(f"LLM classified intent as '{intent_result['intent_type']}' with confidence {confidence}")
+        logger.info(f"LLM reasoning: {intent_result.get('reasoning', 'No reasoning provided')}")
         
         return intent_result
         
     except Exception as e:
-        logger.error(f"Intent classification failed: {e}")
-        return _create_chat_fallback(user_message, f"Classification error: {str(e)}")
+        logger.error(f"LLM intent classification failed: {e}")
+        logger.info("Falling back to regex-based classification")
+        return _create_chat_fallback(user_message, f"LLM unavailable: {str(e)}")
 
 def _classify_intent_with_llm(user_message: str, routing_manifest: Dict[str, Any]) -> Dict[str, Any]:
     """Use dedicated LLM to classify intent based on routing manifest"""
@@ -197,9 +194,10 @@ STRICT TEMPLATE SELECTION:
 
 CONFIDENCE SCORING:
 - 0.9-1.0: Very clear intent match with strong keywords
-- 0.7-0.9: Good intent match with supporting context
+- 0.7-0.9: Good intent match with supporting context  
 - 0.5-0.7: Reasonable intent match but some ambiguity
-- 0.0-0.5: Unclear or ambiguous intent
+- 0.3-0.5: Low confidence but still classifiable
+- 0.0-0.3: Unclear or ambiguous intent
 
 Respond with JSON in this exact format:
 {{
