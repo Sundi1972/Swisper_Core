@@ -149,8 +149,7 @@ def _generate_routing_manifest() -> Dict[str, Any]:
     return routing_manifest
 
 def extract_user_intent(user_message: str) -> Dict[str, Any]:
-    """Extract user intent using contract-aware routing with dedicated LLM classification"""
-    
+    """Extract user intent using LLM-first approach with regex fallback"""
     routing_manifest = _generate_routing_manifest()
     
     try:
@@ -159,6 +158,10 @@ def extract_user_intent(user_message: str) -> Dict[str, Any]:
         confidence = intent_result.get("confidence", 0.0)
         logger.info(f"LLM classified intent as '{intent_result['intent_type']}' with confidence {confidence}")
         logger.info(f"LLM reasoning: {intent_result.get('reasoning', 'No reasoning provided')}")
+        
+        if confidence < 0.6:
+            logger.warning(f"Low LLM confidence {confidence}, falling back to regex classification")
+            return _create_chat_fallback(user_message, f"Low LLM confidence: {confidence}")
         
         return intent_result
         
@@ -312,7 +315,7 @@ def _create_chat_fallback(user_message: str, reason: str) -> Dict[str, Any]:
             "fallback_reason": f"RAG prefix detected: {reason}"
         }
     
-    purchase_keywords = r"\b(buy|purchase|order|acquire|shop for|find to buy|want to buy|looking for|need to buy|get me)\b"
+    purchase_keywords = r"\b(buy|purchase|order|acquire|shop for|find to buy|want to buy|looking for|need to buy|get me|buying)\b"
     logger.info(f"🔍 DEBUG: Checking Purchase contract keywords in '{user_message}' with pattern '{purchase_keywords}'")
     purchase_match = re.search(purchase_keywords, user_message, re.IGNORECASE)
     logger.info(f"🔍 DEBUG: Purchase regex match result: {purchase_match}")
@@ -335,7 +338,7 @@ def _create_chat_fallback(user_message: str, reason: str) -> Dict[str, Any]:
             "fallback_reason": f"Purchase keywords detected: {reason}"
         }
     
-    websearch_keywords = r"\b(today|latest|new|current|recent|2025|2024|now|who are|when did|ministers|government|breaking|news|search the web)\b"
+    websearch_keywords = r"\b(latest|current|recent|2025|2024|breaking|news|search the web|ministers|government|politics|developments|events)\b"
     logger.info(f"🔍 DEBUG: Checking WebSearch keywords in '{user_message}' with pattern '{websearch_keywords}'")
     websearch_match = re.search(websearch_keywords, user_message, re.IGNORECASE)
     logger.info(f"🔍 DEBUG: WebSearch regex match result: {websearch_match}")
