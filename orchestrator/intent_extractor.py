@@ -315,7 +315,7 @@ def _create_chat_fallback(user_message: str, reason: str) -> Dict[str, Any]:
             "fallback_reason": f"RAG prefix detected: {reason}"
         }
     
-    purchase_keywords = r"\b(buy|purchase|order|acquire|shop for|find to buy|want to buy|looking for|need to buy|get me|buying)\b"
+    purchase_keywords = r"\b(buy|purchase|order|acquire|shop for|find to buy|want to buy|looking for|need to buy|get me|buying|find me a|find a good|looking to get|need a new)\b"
     logger.info(f"🔍 DEBUG: Checking Purchase contract keywords in '{user_message}' with pattern '{purchase_keywords}'")
     purchase_match = re.search(purchase_keywords, user_message, re.IGNORECASE)
     logger.info(f"🔍 DEBUG: Purchase regex match result: {purchase_match}")
