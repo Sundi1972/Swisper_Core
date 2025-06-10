@@ -22,8 +22,8 @@ services:
       - ./tmp:/app/tmp                             # For contract artifacts
     working_dir: /app
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}           # From your .env file
-      - SEARCHAPI_API_KEY=${SEARCHAPI_API_KEY}     # From your .env file
+      - OPENAI_API_KEY=${OpenAI_API_Key}           # From your .env file
+      - SEARCHAPI_API_KEY=${SearchAPI_API_Key}     # From your .env file
       - LOG_LEVEL=INFO
       - PYTHONPATH=/app
       - POSTGRES_HOST=postgres
