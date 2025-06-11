@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Attempt to import project modules.
 # This relies on PYTHONPATH being set correctly (e.g., to /app in Docker).
 try:
-    from prompt_preprocessor import clean_and_tag
+    from swisper_core.prompt_preprocessor import clean_and_tag
     from orchestrator.core import handle as orchestrator_handle
     from tool_adapter.mock_google import route as call_tool_adapter # Added for /call endpoint
 except ImportError as e:
