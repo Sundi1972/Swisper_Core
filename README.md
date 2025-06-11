@@ -176,9 +176,31 @@ Swisper_Core/
 
 ### Contributing
 
+We welcome contributions! Please ensure your code follows our standards:
+
+#### Code Quality Requirements
+- Write comprehensive tests for new features
+- Follow existing code style and patterns
+- Ensure all tests pass before submitting PRs
+- Run `poetry run pylint` to verify code quality
+
+#### Documentation Requirements
+- **MANDATORY**: Review and update documentation before creating PRs
+- Update architecture diagrams if system components have changed
+- Verify all code examples use correct import statements
+- Update API documentation for new endpoints or methods
+- See [Documentation Maintenance Guide](docs/DOCUMENTATION_MAINTENANCE.md) for complete requirements
+
+#### Pre-PR Checklist
+- [ ] Architecture documentation reviewed and updated if needed
+- [ ] API documentation updated for any new/modified interfaces
+- [ ] Code examples tested and use current import paths
+- [ ] All tests pass locally
+- [ ] Documentation links verified to work correctly
+
 1. **Fork the repository** and create a feature branch
 2. **Follow code style guidelines** and add comprehensive tests
-3. **Update documentation** for any architectural changes
+3. **Complete documentation requirements** per the maintenance guide
 4. **Run the full test suite** before submitting
 5. **Create a pull request** with detailed description
 
