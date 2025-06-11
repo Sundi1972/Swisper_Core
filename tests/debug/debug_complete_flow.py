@@ -2,7 +2,7 @@
 import sys
 import os
 import asyncio
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from orchestrator.core import handle, Message
 from orchestrator.intent_extractor import extract_user_intent, load_available_contracts, load_available_tools

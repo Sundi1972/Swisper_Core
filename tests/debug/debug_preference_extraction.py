@@ -5,7 +5,7 @@ Debug script to test preference extraction for various product scenarios
 import sys
 import os
 import json
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from contract_engine.llm_helpers import analyze_user_preferences
 

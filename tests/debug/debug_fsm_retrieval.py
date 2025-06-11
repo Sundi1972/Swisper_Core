@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.append('.')
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from orchestrator import session_store
 from contract_engine.contract_engine import ContractStateMachine

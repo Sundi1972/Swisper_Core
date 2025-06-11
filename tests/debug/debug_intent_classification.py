@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-sys.path.append('.')
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from orchestrator.intent_extractor import _generate_routing_manifest, _classify_intent_with_llm
 

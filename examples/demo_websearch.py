@@ -10,7 +10,7 @@ import logging
 from flask import Flask, render_template, request, jsonify
 import json
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
