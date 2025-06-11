@@ -59,7 +59,7 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/chat", { // MODIFIED URL
+      const response = await fetch(`${__API_BASE_URL__}/chat`, { // MODIFIED URL
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -99,7 +99,7 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/chat", {
+      const response = await fetch(`${__API_BASE_URL__}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -124,7 +124,7 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/test/t5-websearch", {
+      const response = await fetch(`${__API_BASE_URL__}/api/test/t5-websearch`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -162,7 +162,7 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/test/t5-memory", {
+      const response = await fetch(`${__API_BASE_URL__}/api/test/t5-memory`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -213,7 +213,7 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
         setMessages(parsedMessages);
       } else {
         try {
-          const response = await fetch(`http://localhost:8000/api/sessions/${targetSessionId}/history`);
+          const response = await fetch(`${__API_BASE_URL__}/api/sessions/${targetSessionId}/history`);
           if (response.ok) {
             const data = await response.json();
             setMessages(data.history || [{ role: "assistant", content: "Hi, how can I help you today?" }]);
