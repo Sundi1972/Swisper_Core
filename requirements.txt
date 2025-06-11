@@ -9,9 +9,21 @@ python-multipart
 langdetect
 emoji
 farm-haystack
+torch>=2.7.1
+transformers>=4.52.4
+spacy>=3.7.0
+sentencepiece>=0.2.0
+sentence-transformers>=4.1.0
 pytest
 pytest-asyncio
 # Linters
 pylint
 psycopg2-binary
 sqlalchemy
+redis
+nltk
+cryptography
+boto3
+requests
+setuptools
+flask

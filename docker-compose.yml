@@ -24,6 +24,7 @@ services:
     environment:
       - OPENAI_API_KEY=${OpenAI_API_Key}           # From your .env file
       - SEARCHAPI_API_KEY=${SearchAPI_API_Key}     # From your .env file
+      - USE_GPU=false
       - LOG_LEVEL=INFO
       - PYTHONPATH=/app
       - POSTGRES_HOST=postgres
