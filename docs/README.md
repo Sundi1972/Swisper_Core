@@ -2,6 +2,10 @@
 
 This directory contains comprehensive documentation for the Swisper Core project, organized by topic for easy navigation.
 
+## 📋 Documentation Maintenance
+
+**IMPORTANT**: Before creating any Pull Request, review the [Documentation Maintenance Guide](DOCUMENTATION_MAINTENANCE.md) to ensure all documentation requirements are met.
+
 ## Documentation Structure
 
 ### 📐 Architecture
@@ -59,10 +63,21 @@ This directory contains comprehensive documentation for the Swisper Core project
 ## Contributing to Documentation
 
 When updating documentation:
+
+### Pre-PR Requirements
+- **Architecture Review**: Update architecture diagrams if system components have changed
+- **API Documentation**: Verify all code examples and API references are current
+- **Configuration Updates**: Update setup and deployment guides for any infrastructure changes
+- **Cross-Reference Validation**: Ensure all internal links and references work correctly
+
+### Documentation Standards
 1. Follow the topic-based organization structure
 2. Update cross-references when moving files
-3. Ensure code examples use correct import paths
+3. Ensure code examples use correct import paths (especially `swisper_core` imports)
 4. Test all documentation links before committing
 5. Update this index when adding new documentation files
+6. Test all code examples for accuracy and executability
+
+See the [Documentation Maintenance Guide](DOCUMENTATION_MAINTENANCE.md) for complete requirements and procedures.
 
 For questions about the documentation structure or content, refer to the [Architecture Overview](architecture/overview.md) or the main [README](../README.md).
