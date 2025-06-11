@@ -23,7 +23,7 @@ export default function ContractViewer() {
     setError(null);
     
     try {
-      const response = await fetch(`http://localhost:8000/contracts/current/${sessionId}`);
+      const response = await fetch(`${__API_BASE_URL__}/contracts/current/${sessionId}`);
       const data = await response.json();
       
       if (!response.ok) {

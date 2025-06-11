@@ -34,7 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const fetchSessions = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/sessions');
+      const response = await fetch(`${__API_BASE_URL__}/api/sessions`);
       const data = await response.json();
       
       const sessionArray = Object.values(data.sessions || {}) as Session[];

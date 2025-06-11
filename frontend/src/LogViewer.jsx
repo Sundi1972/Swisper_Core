@@ -28,7 +28,7 @@ const LogViewer = () => {
 
   const connectWebSocket = () => {
     try {
-      const wsUrl = `ws://localhost:8000/ws/logs?level=${logLevel}`;
+      const wsUrl = `ws://${__API_BASE_URL__.replace('http://', '')}/ws/logs?level=${logLevel}`;
       wsRef.current = new WebSocket(wsUrl);
       
       wsRef.current.onopen = () => {
@@ -74,7 +74,7 @@ const LogViewer = () => {
 
   const refreshLogs = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/logs?level=${logLevel}&limit=100`);
+      const response = await fetch(`${__API_BASE_URL__}/api/logs?level=${logLevel}&limit=100`);
       if (response.ok) {
         const data = await response.json();
         setLogs(data.logs || []);

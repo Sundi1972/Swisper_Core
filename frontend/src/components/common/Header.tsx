@@ -58,7 +58,7 @@ const Header: React.FC<HeaderProps> = ({
       const sessionParam = searchScope === 'current' && currentSessionId 
         ? `&session_id=${encodeURIComponent(currentSessionId)}` 
         : '';
-      const response = await fetch(`http://localhost:8000/api/search?query=${encodeURIComponent(query)}${sessionParam}`);
+      const response = await fetch(`${__API_BASE_URL__}/api/search?query=${encodeURIComponent(query)}${sessionParam}`);
       const data = await response.json();
       
       const results = data.results || [];

@@ -72,7 +72,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const fetchTools = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/tools');
+      const response = await fetch(`${__API_BASE_URL__}/tools`);
       const data = await response.json();
       setTools(Object.entries(data.tools || {}).map(([name, tool]: [string, any]) => ({
         name,
@@ -89,7 +89,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const fetchContracts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/contracts');
+      const response = await fetch(`${__API_BASE_URL__}/contracts`);
       const data = await response.json();
       setContracts(data.contracts || []);
     } catch (error) {
@@ -102,7 +102,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const fetchSystemStatus = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/system/status');
+      const response = await fetch(`${__API_BASE_URL__}/system/status`);
       const data = await response.json();
       setSystemStatus(data);
     } catch (error) {

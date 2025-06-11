@@ -12,5 +12,8 @@ export default defineConfig({
       'localhost',
       '127.0.0.1'
     ]
+  },
+  define: {
+    __API_BASE_URL__: JSON.stringify(process.env.VITE_API_BASE_URL || 'http://localhost:8000')
   }
 })
