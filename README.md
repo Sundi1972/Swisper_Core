@@ -115,23 +115,39 @@ npx playwright test
 
 ## Documentation
 
-### Architecture Documentation
-- [Overall Architecture](docs/architecture/overview.md) - System architecture and component interaction
-- [Tools and Contract Management](docs/architecture/tools-and-contracts.md) - FSM and pipeline integration
-- [Session and Context Management](docs/architecture/session-management.md) - State persistence and recovery
-- [Memory Management](docs/architecture/memory-management.md) - Multi-tier memory architecture
+Comprehensive documentation is available in the [docs/](docs/) directory:
 
-### Deployment Guides
+### 📐 Architecture
+- [System Overview](docs/architecture/overview.md) - High-level architecture and component interactions
+- [Intent Extraction](docs/intent_extraction_architecture.md) - LLM-based intent classification system
+- [Tools and Contract Management](docs/architecture/tools-and-contracts.md) - FSM and pipeline integration
+- [Session Management](docs/architecture/session-management.md) - Session persistence and context management
+- [Memory Management](docs/architecture/memory-management.md) - Multi-layered memory architecture
+
+### 🔌 API Reference
+- [API Documentation](docs/api/API_DOCUMENTATION.md) - Core APIs for pipelines, FSM, and session management
+- [Memory Manager API](docs/api/MEMORY_MANAGER_API.md) - Memory management service API reference
+
+### ⚙️ Configuration
+- [Redis Configuration](docs/configuration/REDIS_CONFIGURATION.md) - Redis setup and optimization guide
+
+### 📚 Guides
+- [T5 Usage Guide](docs/guides/T5_USAGE_GUIDE.md) - Local T5 model integration for Swiss compliance
+- [T5 API Reference](docs/guides/T5_API_REFERENCE.md) - T5 model API documentation
+
+### 🚀 Deployment
 - [Production Strategy](docs/deployment/production-strategy.md) - Switzerland hosting and scalability
 - [Local Setup Guide](docs/deployment/local-setup.md) - Step-by-step development environment
 - [Frontend Template Guide](docs/deployment/frontend-template-guide.md) - Reusable frontend template
 
-### Testing Documentation
+### 🧪 Testing
 - [Testing Strategy](docs/testing/strategy.md) - Comprehensive testing approach
 - [Test Scenarios](docs/testing/scenarios.md) - End-to-end test definitions
 
-### Implementation History
+### 📋 Implementation Plans
 - [Implementation Plans](docs/implementation-plans/) - Feature development history and checklists
+
+See [docs/README.md](docs/README.md) for complete documentation index.
 
 ## Development
 
