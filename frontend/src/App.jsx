@@ -7,6 +7,10 @@ import Header from './components/common/Header';
 import Sidebar from './components/common/Sidebar';
 
 function App() {
+  console.log('Frontend Environment Check:');
+  console.log('API Base URL:', __API_BASE_URL__);
+  console.log('Expected: http://localhost:8000');
+  
   const [activeTab, setActiveTab] = useState('chat');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isFullWidth, setIsFullWidth] = useState(false);

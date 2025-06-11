@@ -9,7 +9,11 @@ export default [
     files: ['**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2020,
-      globals: globals.browser,
+      globals: {
+        ...globals.browser,
+        __API_BASE_URL__: 'readonly',
+        process: 'readonly',
+      },
       parserOptions: {
         ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },
@@ -28,6 +32,23 @@ export default [
         'warn',
         { allowConstantExport: true },
       ],
+    },
+  },
+  {
+    files: ['**/*.test.{js,jsx}', '**/__tests__/**/*.{js,jsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.jest,
+        describe: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        it: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+      },
     },
   },
 ]
