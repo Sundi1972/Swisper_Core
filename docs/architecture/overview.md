@@ -330,6 +330,94 @@ SpecScraper → CompatibilityChecker → PreferenceRanker
 - Performance monitoring for optimization insights
 - Async execution for improved responsiveness
 
+## Current Implementation Architecture
+
+### Updated Component Diagram
+
+```plantuml
+@startuml
+!define RECTANGLE class
+
+package "Client Layer" {
+  [Frontend] as FE
+  [Gateway] as GW
+}
+
+package "Shared Core Layer" {
+  [swisper_core] as SC {
+    - SwisperContext
+    - Logging utilities
+    - Error handling
+    - Performance monitoring
+    - Session management
+    - Privacy utilities
+    - Validation
+  }
+}
+
+package "Orchestration Layer" {
+  [Orchestrator] as ORCH
+  [Intent Extractor] as IE
+  [Session Store] as SS
+  [LLM Adapter] as LLM
+}
+
+package "Execution Layer" {
+  [Contract Engine] as CE
+  [Tool Adapter] as TA
+  [Haystack Pipeline] as HP
+  [Websearch Pipeline] as WP
+}
+
+package "Data Processing" {
+  [Product Search Pipeline] as PSP
+  [Preference Match Pipeline] as PMP
+  [Rolling Summariser] as RS
+  [RAG Pipeline] as RAG
+}
+
+package "Privacy & Compliance" {
+  [PII Redactor] as PIR
+  [Encryption Service] as ES
+  [Audit Store] as AS
+}
+
+FE --> GW : HTTP/WebSocket
+GW --> ORCH : Route Request
+ORCH --> IE : Extract Intent
+ORCH --> SS : Session Management
+IE --> CE : Contract Intent
+IE --> HP : RAG Intent
+IE --> TA : Tool Intent
+CE --> PSP : Product Search
+CE --> PMP : Preference Matching
+CE --> WP : Web Search
+HP --> RAG : Document Q&A
+ORCH --> LLM : LLM Operations
+CE --> RS : Summarization
+CE --> PIR : PII Detection
+PIR --> AS : Audit Logging
+AS --> ES : Encryption
+
+SC --> ORCH : Shared utilities
+SC --> CE : Context & logging
+SC --> HP : Performance monitoring
+SC --> TA : Error handling
+SC --> SS : Session persistence
+
+@enduml
+```
+
+### Shared Core Integration
+
+The swisper_core module provides foundational services to all components:
+- **Logging**: Standardized logging across all modules
+- **Error Handling**: Unified error types and handling strategies
+- **Performance Monitoring**: Caching, timing, and health monitoring
+- **Session Management**: Context serialization and persistence
+- **Privacy Utilities**: PII redaction, encryption, and audit services
+- **Validation**: Input validation and state verification
+
 ## Next Steps
 
 For detailed implementation guidance, see:

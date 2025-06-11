@@ -119,8 +119,7 @@ Main FSM class for managing contract flow.
 from contract_engine.contract_engine import ContractStateMachine
 from swisper_core import SwisperContext
 
-import os
-fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
+fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
 fsm.context = SwisperContext(
     session_id="session_123",
     product_query="gaming laptop",
@@ -162,7 +161,7 @@ Each FSM state has a dedicated handler method:
 Saves enhanced session context with pipeline metadata.
 
 ```python
-from swisper_core.session import save_session_context
+from contract_engine.session_persistence import save_session_context
 
 save_session_context("session_123", fsm.context)
 ```
@@ -171,7 +170,7 @@ save_session_context("session_123", fsm.context)
 Loads session context with pipeline execution history.
 
 ```python
-from swisper_core.session import load_session_context
+from contract_engine.session_persistence import load_session_context
 
 context = load_session_context("session_123")
 if context:
@@ -182,7 +181,7 @@ if context:
 Records pipeline execution for session recovery.
 
 ```python
-from swisper_core.session import save_pipeline_execution
+from contract_engine.session_persistence import save_pipeline_execution
 
 save_pipeline_execution(
     "session_123", 
@@ -223,9 +222,9 @@ metrics = context.pipeline_performance_metrics
 Thread-safe caching with TTL support.
 
 ```python
-from swisper_core.monitoring import PerformanceCache
+from swisper_core import PerformanceCache
 
-cache = PerformanceCache(default_ttl_minutes=30)
+cache = PerformanceCache()
 cache.set("key", value)
 cached_value = cache.get("key")
 ```
@@ -234,9 +233,9 @@ cached_value = cache.get("key")
 Context manager for timing operations.
 
 ```python
-from swisper_core.monitoring import PipelineTimer
+from swisper_core import PipelineTimer
 
-with PipelineTimer("product_search") as timer:
+with PipelineTimer() as timer:
     result = await search_pipeline.run(query="laptop")
     
 print(f"Search took {timer.duration:.2f} seconds")
@@ -246,17 +245,10 @@ print(f"Search took {timer.duration:.2f} seconds")
 Global performance metrics collection.
 
 ```python
-from swisper_core.monitoring import PerformanceMonitor
+from swisper_core import PerformanceMonitor
 
-# Record operation
-PerformanceMonitor.record_operation("product_search", 2.5)
-
-# Get statistics
-stats = PerformanceMonitor.get_stats("product_search")
-# Returns: {"count": 10, "avg_duration": 2.3, "min_duration": 1.8, ...}
-
-# Get all statistics
-all_stats = PerformanceMonitor.get_all_stats()
+monitor = PerformanceMonitor()
+# Performance monitoring functionality available through swisper_core
 ```
 
 ### Performance Decorators
@@ -265,9 +257,9 @@ all_stats = PerformanceMonitor.get_all_stats()
 Automatically times function execution.
 
 ```python
-from swisper_core.monitoring import timed_operation
+from swisper_core import timed_operation
 
-@timed_operation("attribute_analysis")
+@timed_operation
 def analyze_attributes(products):
     # Function implementation
     return attributes
@@ -277,9 +269,9 @@ def analyze_attributes(products):
 Caches function results with TTL.
 
 ```python
-from swisper_core.monitoring import cached_operation, attribute_cache
+from swisper_core import cached_operation, attribute_cache
 
-@cached_operation(attribute_cache)
+@cached_operation
 def expensive_analysis(products, query):
     # Expensive computation
     return result
@@ -291,7 +283,7 @@ def expensive_analysis(products, query):
 Tracks external service availability.
 
 ```python
-from swisper_core.errors import health_monitor
+from swisper_core import health_monitor
 
 # Check service health
 is_healthy = health_monitor.is_service_healthy("openai_api")
@@ -309,11 +301,10 @@ status = health_monitor.get_health_status()
 Creates user-friendly error messages.
 
 ```python
-from swisper_core.errors import create_user_friendly_error_message
+from swisper_core import create_user_friendly_error_message
 
 message = create_user_friendly_error_message(
-    "search_failed", 
-    {"query": "laptop"}
+    "search_failed"
 )
 ```
 
@@ -321,9 +312,9 @@ message = create_user_friendly_error_message(
 Gets degraded operation messages.
 
 ```python
-from swisper_core.errors import get_degraded_operation_message
+from swisper_core import get_degraded_operation_message
 
-message = get_degraded_operation_message("preference_ranking")
+message = get_degraded_operation_message()
 ```
 
 ## Orchestrator API
@@ -388,8 +379,7 @@ from contract_engine.pipelines.product_search_pipeline import create_product_sea
 from contract_engine.pipelines.preference_match_pipeline import create_preference_match_pipeline
 
 # Initialize FSM with pipelines
-import os
-fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
+fsm = ContractStateMachine("contract_templates/purchase_item.yaml")
 fsm.product_search_pipeline = create_product_search_pipeline()
 fsm.preference_match_pipeline = create_preference_match_pipeline()
 

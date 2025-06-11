@@ -93,6 +93,48 @@ Intent extraction logs now include:
 - Confidence scores and decision logic
 - Fallback reasons when applicable
 
+## Current Implementation
+
+The intent extraction system is implemented in `orchestrator/intent_extractor.py` using OpenAI's GPT-4o model with structured prompting and response validation. The system maintains a routing manifest that includes:
+
+- Available contract types loaded from `contract_templates/` directory
+- Tool registry with MCP (Model Context Protocol) tool descriptions
+- Intent classification with four main types: chat, rag, tool, contract
+- LLM-based classification with regex fallback for reliability
+- Confidence scoring and response validation mechanisms
+
+### Key Components
+
+**Routing Manifest Generation**:
+```python
+def _generate_routing_manifest() -> Dict[str, Any]:
+    contracts = load_available_contracts()
+    tools = load_available_tools()
+    
+    return {
+        "intent_types": {
+            "chat": "General conversation and questions",
+            "rag": "Document search and knowledge queries", 
+            "tool": "External service interactions",
+            "contract": "Multi-step workflows and purchases"
+        },
+        "available_contracts": contracts,
+        "available_tools": tools,
+        "trigger_keywords": {
+            "rag": ["#rag", "search documents", "find information"],
+            "contract": ["buy", "purchase", "order", "I want to"],
+            "tool": ["search", "lookup", "find products"]
+        }
+    }
+```
+
+**Intent Classification Process**:
+1. Generate routing manifest with current contracts and tools
+2. Use LLM with structured prompt to classify user intent
+3. Validate LLM response format and confidence scores
+4. Fall back to regex-based classification if LLM fails
+5. Return structured intent with routing information
+
 ## Current LLM Usage
 
 **Interim Solution**: OpenAI ChatGPT-4.0
@@ -105,7 +147,23 @@ Intent extraction logs now include:
 - Explicit routing manifest inclusion
 - Deterministic template selection enforcement
 
-## Future Architecture Plans
+## Future Plans
+
+### Specialized Intent Classification Models
+
+We plan to develop specialized models for intent classification to reduce dependency on general-purpose LLMs, in line with Switzerland's data sovereignty requirements:
+
+1. **Local T5-based Classification**: Fine-tuned T5 models for intent detection (see `docs/guides/T5_USAGE_GUIDE.md`)
+2. **Embedding-based Routing**: Vector similarity for intent matching using local models
+3. **Hybrid Approaches**: Combining LLM classification with local model validation
+4. **Swiss-hosted Models**: Deployment of classification models within Swiss data centers
+
+### Implementation Roadmap
+
+**Phase 1**: Enhance current LLM-based system with better fallback mechanisms
+**Phase 2**: Implement T5-based local classification for sensitive intents
+**Phase 3**: Hybrid system with local models as primary, LLM as fallback
+**Phase 4**: Full local processing for compliance-critical workflows
 
 ### Specialized Intent Classification LLM
 
