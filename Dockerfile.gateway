@@ -10,8 +10,8 @@ RUN poetry config virtualenvs.create false
 # Copy Poetry configuration files
 COPY pyproject.toml poetry.lock* ./
 
-# Install dependencies using Poetry
-RUN poetry install --only=main --no-interaction --no-ansi
+# Install dependencies using Poetry (skip installing the project itself)
+RUN poetry install --only=main --no-root --no-interaction --no-ansi
 
 # Download spaCy language model for NER functionality
 RUN python -m spacy download en_core_web_sm
