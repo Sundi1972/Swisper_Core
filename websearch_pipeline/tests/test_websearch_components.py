@@ -10,6 +10,7 @@ from websearch_pipeline.websearch_components import (
     DeduplicateComponent,
     SnippetFetcherComponent,
     SimilarityRankerComponent,
+    ContentFetcherComponent,
     LLMSummarizerComponent
 )
 
@@ -211,6 +212,68 @@ class TestLLMSummarizerComponent(unittest.TestCase):
         sources = result["sources"]
         self.assertLessEqual(len(sources), 3)
         self.assertIn("https://example.com", sources)
+
+
+class TestContentFetcherComponent(unittest.TestCase):
+    
+    def setUp(self):
+        self.component = ContentFetcherComponent(max_content_length=1000, timeout=5)
+    
+    @patch('websearch_pipeline.websearch_components.requests.get')
+    def test_run_fetches_content_successfully(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.content = b'<html><body><main>Test webpage content</main></body></html>'
+        mock_get.return_value = mock_response
+        
+        ranked_results = [
+            {"title": "Test Result", "link": "https://example.com", "snippet": "Test snippet"},
+            {"title": "Another Result", "link": "https://test.org", "snippet": "Another snippet"}
+        ]
+        
+        result, edge = self.component.run(ranked_results, "test query")
+        
+        self.assertEqual(edge, "output_1")
+        self.assertIn("content_enriched_results", result)
+        enriched = result["content_enriched_results"][0]
+        self.assertIn("full_content", enriched)
+        self.assertIn("Test webpage content", enriched["full_content"])
+    
+    @patch('websearch_pipeline.websearch_components.requests.get')
+    def test_run_handles_fetch_error_gracefully(self, mock_get):
+        mock_get.side_effect = Exception("Network error")
+        
+        ranked_results = [
+            {"title": "Test Result", "link": "https://example.com", "snippet": "Test snippet"}
+        ]
+        
+        result, edge = self.component.run(ranked_results, "test query")
+        
+        self.assertEqual(edge, "output_1")
+        enriched = result["content_enriched_results"][0]
+        self.assertEqual(enriched["full_content"], "Test snippet")
+    
+    def test_run_with_empty_results(self):
+        result, edge = self.component.run([], "test query")
+        
+        self.assertEqual(edge, "output_1")
+        self.assertEqual(result["content_enriched_results"], [])
+    
+    @patch('websearch_pipeline.websearch_components.requests.get')
+    def test_run_processes_only_top_3_results(self, mock_get):
+        ranked_results = [
+            {"title": f"Result {i}", "link": f"https://example{i}.com", "snippet": f"Snippet {i}"}
+            for i in range(5)
+        ]
+        
+        mock_response = MagicMock()
+        mock_response.content = b'<html><body>Content</body></html>'
+        mock_get.return_value = mock_response
+        
+        result, edge = self.component.run(ranked_results, "test query")
+        
+        self.assertEqual(mock_get.call_count, 3)
+        self.assertEqual(len(result["content_enriched_results"]), 5)
 
 
 if __name__ == '__main__':

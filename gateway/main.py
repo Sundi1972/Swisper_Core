@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Attempt to import project modules.
 # This relies on PYTHONPATH being set correctly (e.g., to /app in Docker).
 try:
-    from prompt_preprocessor import clean_and_tag
+    from swisper_core.prompt_preprocessor import clean_and_tag
     from orchestrator.core import handle as orchestrator_handle
     from tool_adapter.mock_google import route as call_tool_adapter # Added for /call endpoint
 except ImportError as e:
@@ -670,6 +670,69 @@ async def get_system_status():
     except Exception as e:
         logger.error("Error getting system status: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error getting system status: {str(e)}")
+
+
+@app.get("/volatility-settings")
+async def get_volatility_settings():
+    """Get volatility keyword settings"""
+    logger.info("Received request for GET /volatility-settings")
+    try:
+        from orchestrator.volatility_classifier import get_volatility_settings
+        settings = get_volatility_settings()
+        return {"volatility_settings": settings}
+    except Exception as e:
+        logger.error("Error getting volatility settings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting volatility settings: {str(e)}")
+
+@app.post("/volatility-settings")
+async def update_volatility_settings(settings: Dict[str, Any]):
+    """Update volatility keyword settings"""
+    logger.info("Received request for POST /volatility-settings")
+    try:
+        required_keys = ["volatile_keywords", "semi_static_keywords", "static_keywords"]
+        for key in required_keys:
+            if key not in settings:
+                raise HTTPException(status_code=400, detail=f"Missing required key: {key}")
+            if not isinstance(settings[key], list):
+                raise HTTPException(status_code=400, detail=f"Key {key} must be a list")
+        
+        logger.info("Volatility settings validation passed")
+        return {"status": "success", "message": "Settings updated successfully"}
+    except Exception as e:
+        logger.error("Error updating volatility settings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error updating volatility settings: {str(e)}")
+
+
+@app.get("/volatility-settings")
+async def get_volatility_settings():
+    """Get volatility keyword settings"""
+    logger.info("Received request for GET /volatility-settings")
+    try:
+        from orchestrator.volatility_classifier import get_volatility_settings
+        settings = get_volatility_settings()
+        return {"volatility_settings": settings}
+    except Exception as e:
+        logger.error("Error getting volatility settings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting volatility settings: {str(e)}")
+
+
+@app.post("/volatility-settings")
+async def update_volatility_settings(settings: Dict[str, Any]):
+    """Update volatility keyword settings"""
+    logger.info("Received request for POST /volatility-settings")
+    try:
+        required_keys = ["volatile_keywords", "semi_static_keywords", "static_keywords"]
+        for key in required_keys:
+            if key not in settings:
+                raise HTTPException(status_code=400, detail=f"Missing required key: {key}")
+            if not isinstance(settings[key], list):
+                raise HTTPException(status_code=400, detail=f"Key {key} must be a list")
+
+        logger.info("Volatility settings validation passed")
+        return {"status": "success", "message": "Settings updated successfully"}
+    except Exception as e:
+        logger.error("Error updating volatility settings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error updating volatility settings: {str(e)}")
 
 
 if __name__ == "__main__":

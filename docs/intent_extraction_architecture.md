@@ -6,6 +6,106 @@ The intent extraction system in Swisper Core uses a contract-aware routing archi
 
 ## Current Architecture (June 2025)
 
+### Enhanced Volatility-Based Intent Classification
+
+**Status**: ✅ **IMPLEMENTED AND ACTIVE** (June 2025)
+
+The intent extraction system now includes an enhanced two-step inference process that combines keyword-based volatility classification with LLM confirmation to improve routing accuracy for time-sensitive queries.
+
+#### Key Components
+
+**1. Volatility Classification (`orchestrator/volatility_classifier.py`)**
+- **Purpose**: Pre-classify queries based on information volatility
+- **Categories**: 
+  - `volatile`: Time-sensitive, current information (ministers, prices, breaking news)
+  - `semi_static`: Occasionally changing (product specs, company info)
+  - `static`: Stable/historical information (biography, geography, definitions)
+  - `unknown`: No clear keyword match
+
+**2. Temporal Cue Detection (`orchestrator/prompt_preprocessor.py`)**
+- **Purpose**: Identify time-sensitive language patterns
+- **Keywords**: "today", "now", "currently", "latest", "new", "as of", "2025", "current"
+
+**3. Two-Step Inference Process**
+```python
+def extract_user_intent(user_input: str) -> dict:
+    # Step 1: Keyword-based volatility pre-classification
+    volatility_result = classify_entity_category(user_input)
+    temporal_cue = has_temporal_cue(user_input)
+    
+    # Step 2: LLM classification with volatility context
+    enhanced_prompt = f"""
+    User query: "{user_input}"
+    Volatility classification: {volatility_result["volatility"]}
+    Temporal cue detected: {temporal_cue}
+    Keyword reasoning: {volatility_result["reason"]}
+    
+    Determine intent type considering volatility context...
+    """
+    
+    return llm_classify_with_context(enhanced_prompt)
+```
+
+#### Enhanced Intent Types
+
+The system now supports five intent types with volatility-aware routing:
+- **chat**: General knowledge, historical information (static/semi-static)
+- **websearch**: Time-sensitive, current information (volatile + temporal cues)
+- **rag**: Document search and knowledge queries
+- **contract**: Multi-step workflows and purchases  
+- **tool_usage**: External service interactions
+
+#### Volatility Keyword Configuration
+
+**Default Categories**:
+```python
+VOLATILITY_KEYWORDS = {
+    "volatile_keywords": [
+        "latest", "current", "recent", "today", "now", "currently", 
+        "ministers", "government", "cabinet", "officials", "CEO",
+        "president", "price", "stock", "breaking", "news", "2025"
+    ],
+    "semi_static_keywords": [
+        "specs", "specifications", "features", "iPhone", "model", 
+        "company", "headquarters", "founded", "employees"
+    ],
+    "static_keywords": [
+        "history", "biography", "born", "died", "capital", "population",
+        "definition", "explain", "what is", "who was", "historical"
+    ]
+}
+```
+
+**UI Configuration**: Editable through Settings Modal → "Volatility Indicators" tab
+
+#### Test Results
+
+**Verified Working Examples**:
+- ✅ "Who is Angela Merkel" → **chat** (static biographical info)
+- ✅ "who is the current german finance minister" → **websearch** (volatile + temporal)
+- ✅ "Latest news about German politics" → **websearch** (volatile keywords)
+- ✅ "Price of Bitcoin today" → **websearch** (volatile + temporal)
+- ✅ "Explain quantum computing" → **chat** (static knowledge)
+
+**Session Consistency**: ✅ Multiple consecutive queries route correctly without interference
+
+#### API Integration
+
+**New Endpoints**:
+- `GET /volatility-settings`: Retrieve keyword configuration
+- `POST /volatility-settings`: Update keyword categories
+
+**Enhanced Response Format**:
+```json
+{
+  "intent_type": "websearch",
+  "confidence": 0.95,
+  "reasoning": "Query contains volatile keywords 'current' + 'minister' with temporal context",
+  "volatility_level": "volatile",
+  "requires_websearch": true
+}
+```
+
 ### Contract-Aware Intent Router
 
 The intent extraction system (`orchestrator/intent_extractor.py`) implements a dynamic routing manifest that includes:
@@ -220,10 +320,12 @@ The intent extraction system maintains Switzerland data sovereignty requirements
 
 ## Migration Path
 
-### Phase 1 (Current): ChatGPT-based Classification ✅
-- Contract-aware routing manifest
-- Deterministic template selection
-- Confidence-based fallbacks
+### Phase 1 (Current): Enhanced Volatility-Based Classification ✅
+- Two-step inference process with volatility pre-analysis
+- Temporal cue detection for time-sensitive queries
+- Contract-aware routing manifest with volatility context
+- Deterministic template selection with enhanced LLM prompts
+- Confidence-based fallbacks with volatility reasoning
 
 ### Phase 2 (Next): Enhanced Validation
 - Comprehensive intent test suite
@@ -243,10 +345,12 @@ The intent extraction system maintains Switzerland data sovereignty requirements
 ## Key Design Principles
 
 1. **Deterministic**: LLM must select from predefined options only
-2. **Extensible**: Easy to add new contracts and intent types
-3. **Robust**: Graceful fallbacks for edge cases
-4. **Observable**: Comprehensive logging and reasoning
-5. **Compliant**: Switzerland data sovereignty maintained
-6. **Testable**: Isolated testing for each component
+2. **Volatility-Aware**: Two-step classification considers information freshness
+3. **Extensible**: Easy to add new contracts, intent types, and volatility keywords
+4. **Robust**: Graceful fallbacks for edge cases with enhanced reasoning
+5. **Observable**: Comprehensive logging including volatility analysis
+6. **Compliant**: Switzerland data sovereignty maintained
+7. **Testable**: Isolated testing for each component including volatility classification
+8. **Configurable**: User-editable volatility keywords through UI
 
 This architecture ensures reliable intent classification while providing a clear path for future enhancements and specialized LLM integration.
