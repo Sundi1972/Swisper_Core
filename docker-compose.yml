@@ -1,19 +1,6 @@
 version: '3.8'
 
 services:
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    ports:
-      - "5173:4173"
-    depends_on:
-      - gateway
-    environment:
-      - VITE_API_BASE_URL=http://gateway:8000
-    env_file:
-      - .env
-
   gateway:
     build:
       context: . # This refers to the repository root directory
