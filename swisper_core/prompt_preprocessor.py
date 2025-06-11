@@ -1,7 +1,8 @@
 import re
 import datetime
-import emoji # For stripping emojis
-from langdetect import detect, LangDetectException # For language detection
+import logging
+import emoji
+from langdetect import detect, LangDetectException
 from swisper_core import get_logger
 
 # Configure logger for this module
