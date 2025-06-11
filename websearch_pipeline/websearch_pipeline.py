@@ -8,6 +8,7 @@ try:
         DeduplicateComponent,
         SnippetFetcherComponent,
         SimilarityRankerComponent,
+        ContentFetcherComponent,
         LLMSummarizerComponent
     )
 except ImportError:
@@ -16,6 +17,7 @@ except ImportError:
         DeduplicateComponent,
         SnippetFetcherComponent,
         SimilarityRankerComponent,
+        ContentFetcherComponent,
         LLMSummarizerComponent
     )
 
@@ -26,7 +28,7 @@ def create_websearch_pipeline() -> Pipeline:
     """Create and configure the WebSearch pipeline
     
     Pipeline flow:
-    Query -> SearchAPI -> Deduplicate -> SnippetFetcher -> SimilarityRanker -> LLMSummarizer
+    Query -> SearchAPI -> Deduplicate -> SnippetFetcher -> SimilarityRanker -> ContentFetcher -> LLMSummarizer
     
     Returns:
         Pipeline: Configured Haystack pipeline for web search
@@ -37,19 +39,17 @@ def create_websearch_pipeline() -> Pipeline:
     dedupe_node = DeduplicateComponent()
     snippet_node = SnippetFetcherComponent()
     rank_node = SimilarityRankerComponent(max_results=6)
+    content_node = ContentFetcherComponent(max_content_length=3000, timeout=10)
     summarize_node = LLMSummarizerComponent()
     
     pipeline.add_node(component=search_node, name="SearchAPI", inputs=["Query"])
-    
     pipeline.add_node(component=dedupe_node, name="Deduplicate", inputs=["SearchAPI"])
-    
     pipeline.add_node(component=snippet_node, name="SnippetFetcher", inputs=["Deduplicate"])
-    
     pipeline.add_node(component=rank_node, name="SimilarityRanker", inputs=["SnippetFetcher"])
+    pipeline.add_node(component=content_node, name="ContentFetcher", inputs=["SimilarityRanker"])
+    pipeline.add_node(component=summarize_node, name="LLMSummarizer", inputs=["ContentFetcher"])
     
-    pipeline.add_node(component=summarize_node, name="LLMSummarizer", inputs=["SimilarityRanker"])
-    
-    logger.info("WebSearch Pipeline created successfully")
+    logger.info("Enhanced WebSearch Pipeline created successfully")
     return pipeline
 
 

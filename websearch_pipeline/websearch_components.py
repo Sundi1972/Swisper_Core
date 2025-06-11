@@ -271,8 +271,8 @@ class LLMSummarizerComponent(BaseComponent):
             self.summarizer = TransformersSummarizer(
                 model_name_or_path="t5-small",
                 use_gpu=use_gpu,
-                max_length=150,
-                min_length=50
+                max_length=400,
+                min_length=100
             )
             logger.info(f"T5 summarizer initialized successfully (GPU: {use_gpu})")
             
@@ -283,24 +283,24 @@ class LLMSummarizerComponent(BaseComponent):
             logger.error(f"Error initializing T5 summarizer: {e}")
             self.summarizer = None
 
-    def run(self, ranked_results: List[Dict[str, Any]], query: str) -> Tuple[Dict[str, Any], str]:
-        logger.info(f"LLMSummarizerComponent received {len(ranked_results)} results for query: {query}")
+    def run(self, content_enriched_results: List[Dict[str, Any]], query: str) -> Tuple[Dict[str, Any], str]:
+        logger.info(f"LLMSummarizerComponent received {len(content_enriched_results)} results for query: {query}")
         
-        if not ranked_results or not isinstance(ranked_results, list):
-            logger.warning("No ranked results provided")
+        if not content_enriched_results or not isinstance(content_enriched_results, list):
+            logger.warning("No content enriched results provided")
             return {"summary": "No results found.", "sources": []}, "output_1"
         
         try:
             sources = [
                 result.get("link", "") 
-                for result in ranked_results[:3] 
+                for result in content_enriched_results[:3] 
                 if result.get("link")
             ]
             
             if self.summarizer:
-                summary = self._generate_t5_summary(ranked_results, query)
+                summary = self._generate_t5_summary(content_enriched_results, query)
             else:
-                summary = self._generate_simple_summary(ranked_results, query)
+                summary = self._generate_simple_summary(content_enriched_results, query)
             
             result_data = {
                 "summary": summary,
@@ -316,21 +316,25 @@ class LLMSummarizerComponent(BaseComponent):
                 "sources": []
             }, "output_1"
 
-    def _generate_t5_summary(self, ranked_results: List[Dict[str, Any]], query: str) -> str:
+    def _generate_t5_summary(self, content_enriched_results: List[Dict[str, Any]], query: str) -> str:
         """Generate summary using T5 model"""
         try:
             if not self.summarizer:
                 logger.warning("T5 summarizer not available, falling back to simple summary")
-                return self._generate_simple_summary(ranked_results, query)
+                return self._generate_simple_summary(content_enriched_results, query)
             
-            combined_text = " ".join([
-                f"{result.get('title', '')}: {result.get('snippet', '')}"
-                for result in ranked_results[:6]
-                if result.get('snippet')
-            ])
+            combined_text = ""
             
-            if len(combined_text) > 2000:  # Conservative limit
-                combined_text = combined_text[:2000]
+            for result in content_enriched_results[:3]:
+                full_content = result.get("full_content", "")
+                snippet = result.get("snippet", "")
+                title = result.get("title", "")
+                
+                content = full_content if full_content else snippet
+                combined_text += f"{title}: {content} "
+            
+            if len(combined_text) > 4000:
+                combined_text = combined_text[:4000]
             
             if not combined_text.strip():
                 return "No content available for summarization."
@@ -343,33 +347,35 @@ class LLMSummarizerComponent(BaseComponent):
             if summary_result and len(summary_result) > 0:
                 return summary_result[0].answer
             else:
-                return self._generate_simple_summary(ranked_results, query)
+                return self._generate_simple_summary(content_enriched_results, query)
                 
         except Exception as e:
             logger.error(f"T5 summarization error: {e}")
-            return self._generate_simple_summary(ranked_results, query)
+            return self._generate_simple_summary(content_enriched_results, query)
 
-    def _generate_simple_summary(self, ranked_results: List[Dict[str, Any]], query: str) -> str:
-        """Generate simple summary by concatenating top snippets"""
+    def _generate_simple_summary(self, content_enriched_results: List[Dict[str, Any]], query: str) -> str:
+        """Generate simple summary by concatenating top content or snippets"""
         try:
-            logger.info(f"🔍 DEBUG: _generate_simple_summary received {len(ranked_results)} ranked_results")
-            for i, result in enumerate(ranked_results[:3]):
-                logger.info(f"🔍 DEBUG: Result {i}: title='{result.get('title', '')}', snippet='{result.get('snippet', '')}'")
+            logger.info(f"🔍 DEBUG: _generate_simple_summary received {len(content_enriched_results)} content_enriched_results")
+            for i, result in enumerate(content_enriched_results[:3]):
+                logger.info(f"🔍 DEBUG: Result {i}: title='{result.get('title', '')}', snippet='{result.get('snippet', '')}', has_full_content={bool(result.get('full_content'))}")
             
-            snippets = [
-                result.get("snippet", "")
-                for result in ranked_results[:3]
-                if result.get("snippet")
-            ]
+            content_pieces = []
+            for result in content_enriched_results[:3]:
+                full_content = result.get("full_content", "")
+                snippet = result.get("snippet", "")
+                content = full_content if full_content else snippet
+                if content:
+                    content_pieces.append(content)
             
-            logger.info(f"🔍 DEBUG: Extracted {len(snippets)} snippets: {snippets}")
+            logger.info(f"🔍 DEBUG: Extracted {len(content_pieces)} content pieces")
             
-            if not snippets:
-                logger.warning("🔍 DEBUG: No snippets found, returning fallback message")
+            if not content_pieces:
+                logger.warning("🔍 DEBUG: No content found, returning fallback message")
                 return "No relevant information found."
             
             summary = f"Based on current web search results for '{query}': "
-            summary += " ".join(snippets)
+            summary += " ".join(content_pieces)
             
             if len(summary) > 500:
                 summary = summary[:497] + "..."
@@ -387,3 +393,100 @@ class LLMSummarizerComponent(BaseComponent):
             result, _ = self.run(ranked_results=ranked_results_list, query=query)
             results.append(result)
         return {"summary_batch": results}, "output_1"
+
+
+class ContentFetcherComponent(BaseComponent):
+    """Component that fetches full webpage content from top ranked results"""
+    outgoing_edges = 1
+
+    def __init__(self, max_content_length: int = 3000, timeout: int = 10):
+        super().__init__()
+        self.max_content_length = max_content_length
+        self.timeout = timeout
+
+    def run(self, ranked_results: List[Dict[str, Any]], query: str) -> Tuple[Dict[str, Any], str]:
+        logger.info(f"ContentFetcherComponent received {len(ranked_results)} results for query: {query}")
+        
+        if not ranked_results or not isinstance(ranked_results, list):
+            logger.warning("No ranked results provided")
+            return {"content_enriched_results": []}, "output_1"
+        
+        try:
+            content_enriched_results = []
+            
+            for i, result in enumerate(ranked_results[:3]):
+                if not isinstance(result, dict) or not result.get("link"):
+                    content_enriched_results.append(result)
+                    continue
+                
+                enriched_result = result.copy()
+                
+                try:
+                    full_content = self._fetch_webpage_content(result["link"])
+                    if full_content:
+                        enriched_result["full_content"] = full_content
+                        logger.info(f"Successfully fetched content from {result['link']} ({len(full_content)} chars)")
+                    else:
+                        enriched_result["full_content"] = result.get("snippet", "")
+                        logger.warning(f"No content extracted from {result['link']}, using snippet fallback")
+                        
+                except Exception as e:
+                    logger.warning(f"Error fetching content from {result['link']}: {e}")
+                    enriched_result["full_content"] = result.get("snippet", "")
+                
+                content_enriched_results.append(enriched_result)
+            
+            content_enriched_results.extend(ranked_results[3:])
+            
+            logger.info(f"Content enrichment completed for {len(content_enriched_results)} results")
+            return {"content_enriched_results": content_enriched_results}, "output_1"
+            
+        except Exception as e:
+            logger.error(f"Error in ContentFetcherComponent: {e}")
+            return {"content_enriched_results": ranked_results, "error": str(e)}, "output_1"
+
+    def _fetch_webpage_content(self, url: str) -> str:
+        """Fetch and extract main content from webpage using BeautifulSoup"""
+        try:
+            from bs4 import BeautifulSoup
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=self.timeout)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            for script in soup(["script", "style", "nav", "header", "footer", "aside"]):
+                script.decompose()
+            
+            main_content = None
+            for selector in ['main', 'article', '.content', '#content', '.post', '.entry']:
+                main_content = soup.select_one(selector)
+                if main_content:
+                    break
+            
+            if not main_content:
+                main_content = soup.find('body') or soup
+            
+            text_content = main_content.get_text(separator=' ', strip=True)
+            
+            text_content = ' '.join(text_content.split())
+            
+            if len(text_content) > self.max_content_length:
+                text_content = text_content[:self.max_content_length]
+            
+            return text_content
+            
+        except Exception as e:
+            logger.warning(f"Error extracting content from {url}: {e}")
+            return ""
+
+    def run_batch(self, ranked_results_batch: List[List[Dict[str, Any]]], queries: List[str]) -> Tuple[Dict[str, Any], str]:
+        results = []
+        for ranked_results_list, query in zip(ranked_results_batch, queries):
+            result, _ = self.run(ranked_results=ranked_results_list, query=query)
+            results.append(result)
+        return {"content_enriched_results_batch": results}, "output_1"
