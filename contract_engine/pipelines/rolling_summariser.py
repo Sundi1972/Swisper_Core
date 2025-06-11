@@ -69,4 +69,5 @@ def summarize_messages(messages: List[Dict[str, Any]]) -> str:
     except Exception as e:
         logger.error(f"T5 summarization failed: {e}")
         combined_content = " ".join([str(msg.get("content", "")) for msg in messages])
-        return combined_content[:200] + "..." if len(combined_content) > 200 else combined_content
+        fallback_summary = combined_content[:200] + "..." if len(combined_content) > 200 else combined_content
+        return f"[T5 Fallback] {fallback_summary}"

@@ -292,10 +292,45 @@ SpecScraper → CompatibilityChecker → PreferenceRanker
 - Alternative processing paths for web scraping failures
 - User-friendly error messages
 
+### Comprehensive Fallback Indicator System
+
+The system now provides complete transparency about service availability through a comprehensive fallback indicator system:
+
+**T5 Model Fallback Detection**:
+- Automatic detection of missing PyTorch/TensorFlow dependencies
+- Clear `[T5 Summary]` vs `[Fallback Mode]` prefixes in responses
+- Graceful degradation to simple concatenation when T5 unavailable
+- Real-time T5 availability status in system endpoints
+
+**System-Wide Fallback Visibility**:
+- Chat responses include system status warnings: `⚠️ System Status: Using fallback services for: [service list]`
+- Frontend displays fallback indicators for all affected services
+- Test endpoints provide detailed fallback status information
+- Clear distinction between real and mock data throughout UI
+
+**Service-Specific Indicators**:
+- **Web Search**: `[Mock Data]` prefix when SearchAPI unavailable
+- **T5 Summarization**: `[T5 Fallback]` for memory and websearch components
+- **PII Protection**: Indicates when privacy services in mock mode
+- **Session Management**: Shows fallback storage mechanisms
+- **Database Services**: Indicates Shelve vs PostgreSQL usage
+
+**Implementation Architecture**:
+```
+Frontend (SwisperChat.jsx) → Gateway (main.py) → get_system_fallback_status()
+                                ↓
+                    Checks: T5, SearchAPI, PII, Session, Database
+                                ↓
+                    Returns: Array of active fallback services
+                                ↓
+                    UI Display: System status warnings in chat responses
+```
+
 ### Health Monitoring
 - System health tracking for external services
 - Automatic service discovery and failover
 - Performance threshold monitoring
+- Real-time fallback status detection and reporting
 
 ## Integration Points
 

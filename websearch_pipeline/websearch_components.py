@@ -259,12 +259,14 @@ class LLMSummarizerComponent(BaseComponent):
     def __init__(self):
         super().__init__()
         self.summarizer = None
+        self.fallback_mode = True
         self._initialize_summarizer()
 
     def _initialize_summarizer(self):
         """Initialize T5 summarizer for Switzerland hosting compliance"""
         try:
             from haystack.nodes import TransformersSummarizer
+            import sentencepiece
             
             use_gpu = os.getenv("USE_GPU", "false").lower() == "true"
             
@@ -274,14 +276,22 @@ class LLMSummarizerComponent(BaseComponent):
                 max_length=400,
                 min_length=100
             )
-            logger.info(f"T5 summarizer initialized successfully (GPU: {use_gpu})")
             
-        except ImportError:
-            logger.warning("TransformersSummarizer not available, falling back to simple concatenation")
+            from haystack.schema import Document
+            test_doc = Document(content="Test initialization")
+            self.summarizer.predict(documents=[test_doc])
+            
+            logger.info(f"T5 summarizer initialized successfully (GPU: {use_gpu})")
+            self.fallback_mode = False
+            
+        except ImportError as e:
+            logger.warning(f"TransformersSummarizer not available: {e}, falling back to simple concatenation")
             self.summarizer = None
+            self.fallback_mode = True
         except Exception as e:
             logger.error(f"Error initializing T5 summarizer: {e}")
             self.summarizer = None
+            self.fallback_mode = True
 
     def run(self, content_enriched_results: List[Dict[str, Any]], query: str) -> Tuple[Dict[str, Any], str]:
         logger.info(f"LLMSummarizerComponent received {len(content_enriched_results)} results for query: {query}")
@@ -340,13 +350,19 @@ class LLMSummarizerComponent(BaseComponent):
                 return "No content available for summarization."
             
             from haystack.schema import Document
-            summary_result = self.summarizer.predict(
-                documents=[Document(content=combined_text)]
-            )
-            
-            if summary_result and len(summary_result) > 0:
-                return summary_result[0].answer
-            else:
+            try:
+                summary_result = self.summarizer.predict(
+                    documents=[Document(content=combined_text)]
+                )
+                
+                if summary_result and len(summary_result) > 0:
+                    summary = summary_result[0].answer if hasattr(summary_result[0], 'answer') else str(summary_result[0])
+                    return f"[T5 Summary] {summary}"
+                else:
+                    logger.warning("T5 summarizer returned empty result, falling back to simple summary")
+                    return self._generate_simple_summary(content_enriched_results, query)
+            except Exception as e:
+                logger.error(f"T5 prediction error: {e}")
                 return self._generate_simple_summary(content_enriched_results, query)
                 
         except Exception as e:
@@ -374,13 +390,13 @@ class LLMSummarizerComponent(BaseComponent):
                 logger.warning("🔍 DEBUG: No content found, returning fallback message")
                 return "No relevant information found."
             
-            summary = f"Based on current web search results for '{query}': "
+            summary = f"[Fallback Mode] Based on current web search results for '{query}': "
             summary += " ".join(content_pieces)
             
             if len(summary) > 500:
                 summary = summary[:497] + "..."
             
-            logger.info(f"🔍 DEBUG: Generated summary: {summary}")
+            logger.info(f"🔍 DEBUG: Generated fallback summary: {summary}")
             return summary
             
         except Exception as e:
@@ -390,7 +406,7 @@ class LLMSummarizerComponent(BaseComponent):
     def run_batch(self, ranked_results_batch: List[List[Dict[str, Any]]], queries: List[str]) -> Tuple[Dict[str, Any], str]:
         results = []
         for ranked_results_list, query in zip(ranked_results_batch, queries):
-            result, _ = self.run(ranked_results=ranked_results_list, query=query)
+            result, _ = self.run(content_enriched_results=ranked_results_list, query=query)
             results.append(result)
         return {"summary_batch": results}, "output_1"
 
