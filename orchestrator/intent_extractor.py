@@ -149,24 +149,34 @@ def _generate_routing_manifest() -> Dict[str, Any]:
     return routing_manifest
 
 def extract_user_intent(user_message: str) -> Dict[str, Any]:
-    """Extract user intent using LLM-first approach with regex fallback"""
+    """Extract user intent using two-step process: volatility classification then LLM confirmation"""
+    from .volatility_classifier import classify_entity_category
+    from .prompt_preprocessor import has_temporal_cue
+    
+    volatility_result = classify_entity_category(user_message)
+    temporal_cue = has_temporal_cue(user_message)
+    
+    logger.info("Pre-classification - Volatility: %s, Temporal: %s", volatility_result['volatility'], temporal_cue)
+    
     routing_manifest = _generate_routing_manifest()
     
     try:
-        intent_result = _classify_intent_with_llm(user_message, routing_manifest)
+        intent_result = _classify_intent_with_llm_enhanced(
+            user_message, routing_manifest, volatility_result, temporal_cue
+        )
         
         confidence = intent_result.get("confidence", 0.0)
-        logger.info(f"LLM classified intent as '{intent_result['intent_type']}' with confidence {confidence}")
-        logger.info(f"LLM reasoning: {intent_result.get('reasoning', 'No reasoning provided')}")
+        logger.info("Enhanced LLM classified intent as '%s' with confidence %s", intent_result['intent_type'], confidence)
+        logger.info("LLM reasoning: %s", intent_result.get('reasoning', 'No reasoning provided'))
         
         if confidence < 0.6:
-            logger.warning(f"Low LLM confidence {confidence}, falling back to regex classification")
+            logger.warning("Low LLM confidence %s, falling back to regex classification", confidence)
             return _create_chat_fallback(user_message, f"Low LLM confidence: {confidence}")
         
         return intent_result
         
     except Exception as e:
-        logger.error(f"LLM intent classification failed: {e}")
+        logger.error("Enhanced LLM intent classification failed: %s", e)
         logger.info("Falling back to regex-based classification")
         return _create_chat_fallback(user_message, f"LLM unavailable: {str(e)}")
 
@@ -224,73 +234,147 @@ CRITICAL: Only use exact template names from the available list. Never invent ne
             {"role": "user", "content": user_prompt}
         ])
         
-        logger.info(f"LLM raw response: {response}")
-        
-        if not response or not response.strip():
-            raise ValueError("Empty LLM response")
-        
-        cleaned_response = response.strip()
-        if cleaned_response.startswith('```json'):
-            cleaned_response = cleaned_response[7:]  # Remove ```json
-        if cleaned_response.startswith('```'):
-            cleaned_response = cleaned_response[3:]   # Remove ```
-        if cleaned_response.endswith('```'):
-            cleaned_response = cleaned_response[:-3]  # Remove trailing ```
-        cleaned_response = cleaned_response.strip()
-        
-        logger.info(f"Cleaned response: {cleaned_response}")
-            
-        intent_data = json.loads(cleaned_response)
-        
-        required_fields = ["intent_type", "confidence", "reasoning"]
-        for field in required_fields:
-            if field not in intent_data:
-                raise ValueError(f"Missing required field: {field}")
-        
-        available_templates = []
-        for option in routing_manifest.get("routing_options", []):
-            if option.get("intent_type") == "contract":
-                for contract in option.get("contracts", []):
-                    available_templates.append(contract.get("template"))
-        
-        if "contract_template" not in intent_data:
-            intent_data["contract_template"] = None
-        elif intent_data["contract_template"]:
-            template = intent_data["contract_template"]
-            logger.info(f"LLM returned contract_template: '{template}'")
-            
-            if template in available_templates:
-                logger.info(f"✅ Valid contract template: '{template}'")
-            else:
-                logger.warning(f"❌ Invalid contract template '{template}' not in available list: {available_templates}")
-                if intent_data.get("intent_type") == "contract" and "purchase_item.yaml" in available_templates:
-                    intent_data["contract_template"] = "purchase_item.yaml"
-                    logger.info(f"🔧 Corrected to valid template: 'purchase_item.yaml'")
-                else:
-                    logger.error(f"No valid contract template found, falling back to chat")
-                    return _create_chat_fallback(user_message, f"Invalid contract template: {template}")
-        if "tools_needed" not in intent_data:
-            intent_data["tools_needed"] = []
-        if "extracted_query" not in intent_data:
-            intent_data["extracted_query"] = user_message
-        elif intent_data["extracted_query"] == "?":
-            intent_data["extracted_query"] = user_message
-        if "rag_question" not in intent_data:
-            intent_data["rag_question"] = None
-            
-        intent_data["parameters"] = {
-            "contract_template": intent_data["contract_template"],
-            "tools_needed": intent_data["tools_needed"],
-            "extracted_query": intent_data["extracted_query"],
-            "rag_question": intent_data["rag_question"]
-        }
-        
-        return intent_data
+        return _parse_llm_response(response, user_message, available_templates)
         
     except Exception as e:
         logger.error(f"LLM classification error: {e}")
         logger.error(f"Raw response was: {response if 'response' in locals() else 'No response'}")
         raise
+
+def _classify_intent_with_llm_enhanced(user_message: str, routing_manifest: Dict[str, Any], 
+                                     volatility_result: Dict[str, Any], temporal_cue: bool) -> Dict[str, Any]:
+    """Enhanced LLM classification with volatility and temporal context"""
+    
+    available_templates = []
+    for option in routing_manifest.get("routing_options", []):
+        if option.get("intent_type") == "contract":
+            for contract in option.get("contracts", []):
+                available_templates.append(contract.get("template"))
+    
+    system_prompt = f"""You are an intelligent intent classification engine for a privacy-first AI assistant.
+
+Your job is to determine how a user request should be handled based on:
+- The user's original message
+- Volatility classification from keyword heuristics
+- Temporal cue detection
+- Available contracts and tools
+
+AVAILABLE ROUTING OPTIONS:
+{json.dumps(routing_manifest, indent=2)}
+
+PRE-ANALYSIS CONTEXT:
+- Volatility Level: {volatility_result['volatility']}
+- Temporal Cue Detected: {temporal_cue}
+- Keyword Reason: {volatility_result['reason']}
+
+ENHANCED CLASSIFICATION RULES:
+1. For purchase-related requests (buy, purchase, order, acquire, shop for), use "contract" intent
+2. For document questions starting with "#rag", use "rag" intent  
+3. For analysis, comparison, or tool-based tasks, use "tool_usage" intent
+4. For general conversation and static knowledge, use "chat" intent
+5. For current/time-sensitive information requests, use "websearch" intent
+
+WEBSEARCH vs CHAT DISTINCTION:
+- Use "websearch" for queries requiring current, up-to-date information:
+  * Current government officials, ministers, cabinet members, CEOs
+  * Latest news, recent events, breaking news, current prices
+  * Questions with temporal indicators or volatile keywords
+  * Volatility level "volatile" strongly suggests websearch
+- Use "chat" for general knowledge that doesn't change frequently:
+  * Historical facts, biographical information about well-known figures
+  * Geographic information, scientific facts, mathematical concepts
+  * Volatility level "static" strongly suggests chat
+
+STRICT TEMPLATE SELECTION:
+- You MUST only select contract templates from this exact list: {available_templates}
+- For purchase requests, use EXACTLY: "purchase_item.yaml"
+
+Respond with JSON in this exact format:
+{{
+  "intent_type": "chat|websearch|rag|tool_usage|contract",
+  "confidence": 0.0-1.0,
+  "contract_template": "purchase_item.yaml|null",
+  "tools_needed": ["tool1", "tool2"] or [],
+  "extracted_query": "enhanced search query or original message",
+  "rag_question": "document question or null",
+  "volatility_level": "{volatility_result['volatility']}",
+  "requires_websearch": true/false,
+  "reasoning": "detailed explanation including volatility analysis and temporal context"
+}}"""
+
+    user_prompt = f"User message: {user_message}"
+    
+    llm_adapter = get_llm_adapter()
+    response = llm_adapter.chat_completion([
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ])
+    
+    return _parse_llm_response(response, user_message, available_templates)
+
+def _parse_llm_response(response: str, user_message: str, available_templates: list) -> Dict[str, Any]:
+    """Parse and validate LLM response for intent classification"""
+    logger.info("LLM raw response: %s", response)
+    
+    if not response or not response.strip():
+        raise ValueError("Empty LLM response")
+    
+    cleaned_response = response.strip()
+    if cleaned_response.startswith('```json'):
+        cleaned_response = cleaned_response[7:]
+    if cleaned_response.startswith('```'):
+        cleaned_response = cleaned_response[3:]
+    if cleaned_response.endswith('```'):
+        cleaned_response = cleaned_response[:-3]
+    cleaned_response = cleaned_response.strip()
+    
+    logger.info("Cleaned response: %s", cleaned_response)
+        
+    intent_data = json.loads(cleaned_response)
+    
+    required_fields = ["intent_type", "confidence", "reasoning"]
+    for field in required_fields:
+        if field not in intent_data:
+            raise ValueError(f"Missing required field: {field}")
+    
+    if "contract_template" not in intent_data:
+        intent_data["contract_template"] = None
+    elif intent_data["contract_template"]:
+        template = intent_data["contract_template"]
+        logger.info(f"LLM returned contract_template: '{template}'")
+        
+        if template in available_templates:
+            logger.info(f"✅ Valid contract template: '{template}'")
+        else:
+            logger.warning(f"❌ Invalid contract template '{template}' not in available list: {available_templates}")
+            if intent_data.get("intent_type") == "contract" and "purchase_item.yaml" in available_templates:
+                intent_data["contract_template"] = "purchase_item.yaml"
+                logger.info(f"🔧 Corrected to valid template: 'purchase_item.yaml'")
+            else:
+                logger.error(f"No valid contract template found, falling back to chat")
+                return _create_chat_fallback(user_message, f"Invalid contract template: {template}")
+    
+    for field, default in [
+        ("tools_needed", []),
+        ("extracted_query", user_message),
+        ("rag_question", None),
+        ("volatility_level", "unknown"),
+        ("requires_websearch", False)
+    ]:
+        if field not in intent_data:
+            intent_data[field] = default
+    
+    if intent_data["extracted_query"] == "?":
+        intent_data["extracted_query"] = user_message
+        
+    intent_data["parameters"] = {
+        "contract_template": intent_data["contract_template"],
+        "tools_needed": intent_data["tools_needed"],
+        "extracted_query": intent_data["extracted_query"],
+        "rag_question": intent_data["rag_question"]
+    }
+    
+    return intent_data
 
 def _create_chat_fallback(user_message: str, reason: str) -> Dict[str, Any]:
     """Create chat intent fallback for low confidence or error cases"""

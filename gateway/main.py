@@ -672,6 +672,69 @@ async def get_system_status():
         raise HTTPException(status_code=500, detail=f"Error getting system status: {str(e)}")
 
 
+@app.get("/volatility-settings")
+async def get_volatility_settings():
+    """Get volatility keyword settings"""
+    logger.info("Received request for GET /volatility-settings")
+    try:
+        from orchestrator.volatility_classifier import get_volatility_settings
+        settings = get_volatility_settings()
+        return {"volatility_settings": settings}
+    except Exception as e:
+        logger.error("Error getting volatility settings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting volatility settings: {str(e)}")
+
+@app.post("/volatility-settings")
+async def update_volatility_settings(settings: Dict[str, Any]):
+    """Update volatility keyword settings"""
+    logger.info("Received request for POST /volatility-settings")
+    try:
+        required_keys = ["volatile_keywords", "semi_static_keywords", "static_keywords"]
+        for key in required_keys:
+            if key not in settings:
+                raise HTTPException(status_code=400, detail=f"Missing required key: {key}")
+            if not isinstance(settings[key], list):
+                raise HTTPException(status_code=400, detail=f"Key {key} must be a list")
+        
+        logger.info("Volatility settings validation passed")
+        return {"status": "success", "message": "Settings updated successfully"}
+    except Exception as e:
+        logger.error("Error updating volatility settings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error updating volatility settings: {str(e)}")
+
+
+@app.get("/volatility-settings")
+async def get_volatility_settings():
+    """Get volatility keyword settings"""
+    logger.info("Received request for GET /volatility-settings")
+    try:
+        from orchestrator.volatility_classifier import get_volatility_settings
+        settings = get_volatility_settings()
+        return {"volatility_settings": settings}
+    except Exception as e:
+        logger.error("Error getting volatility settings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error getting volatility settings: {str(e)}")
+
+
+@app.post("/volatility-settings")
+async def update_volatility_settings(settings: Dict[str, Any]):
+    """Update volatility keyword settings"""
+    logger.info("Received request for POST /volatility-settings")
+    try:
+        required_keys = ["volatile_keywords", "semi_static_keywords", "static_keywords"]
+        for key in required_keys:
+            if key not in settings:
+                raise HTTPException(status_code=400, detail=f"Missing required key: {key}")
+            if not isinstance(settings[key], list):
+                raise HTTPException(status_code=400, detail=f"Key {key} must be a list")
+
+        logger.info("Volatility settings validation passed")
+        return {"status": "success", "message": "Settings updated successfully"}
+    except Exception as e:
+        logger.error("Error updating volatility settings: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error updating volatility settings: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
