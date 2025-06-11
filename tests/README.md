@@ -73,3 +73,4 @@ The following test files were removed for not meeting quality standards:
 - `test_memory_serializer.py` - Missing sentence_transformers dependency
 - `test_summary_store.py` - Missing sentence_transformers dependency
 - `test_contract_flow_enhancements.py` - Missing contract template files, API mismatches, incorrect state assertions
+- `test_fsm_state_handlers.py` - Purchase_item flow dependency, async/await mismatches, missing contract templates

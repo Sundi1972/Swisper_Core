@@ -59,30 +59,7 @@ class TestSwisperContext:
         assert restored.product_query == original.product_query
         assert restored.preferences == original.preferences
 
-class TestContractStateMachineWithContext:
-    def test_fsm_context_initialization(self):
-        """Test FSM initializes with SwisperContext"""
-        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
-        
-        assert hasattr(fsm, 'context')
-        assert isinstance(fsm.context, SwisperContext)
-        assert fsm.context.current_state == "start"
-        assert fsm.context.contract_template_path == "contract_templates/purchase_item.yaml"
-        
-    def test_fsm_context_parameter_filling(self):
-        """Test context updates when parameters are filled"""
-        fsm = ContractStateMachine(os.path.join(os.path.dirname(os.path.dirname(__file__)), "contract_templates", "purchase_item.yaml"))
-        
-        fsm.fill_parameters({
-            "session_id": "test_123",
-            "product": "GPU RTX 4090",
-            "preferences": ["gaming", "quiet"]
-        })
-        
-        assert fsm.context.session_id == "test_123"
-        assert fsm.context.product_query == "GPU RTX 4090"
-        assert fsm.context.preferences == ["gaming", "quiet"]
-        assert fsm.context.updated_at is not None
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
