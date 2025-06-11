@@ -64,12 +64,22 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ messages: updatedMessages, session_id: sessionId })
+        body: JSON.stringify({ 
+          messages: updatedMessages, 
+          session_id: sessionId,
+          include_system_status: true
+        })
       });
 
       const data = await response.json();
       if (data.reply) {
-        setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+        let responseContent = data.reply;
+        
+        if (data.system_fallbacks && data.system_fallbacks.length > 0) {
+          responseContent += `\n\n⚠️ **System Status**: Using fallback services for: ${data.system_fallbacks.join(', ')}`;
+        }
+        
+        setMessages(prev => [...prev, { role: "assistant", content: responseContent }]);
       }
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong." }]);
@@ -104,12 +114,22 @@ const SwisperChat = forwardRef(({ searchQuery = '', highlightEnabled = false }, 
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ messages: updatedMessagesWithRag, session_id: sessionId })
+        body: JSON.stringify({ 
+          messages: updatedMessagesWithRag, 
+          session_id: sessionId,
+          include_system_status: true
+        })
       });
 
       const data = await response.json();
       if (data.reply) {
-        setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+        let responseContent = data.reply;
+        
+        if (data.system_fallbacks && data.system_fallbacks.length > 0) {
+          responseContent += `\n\n⚠️ **System Status**: Using fallback services for: ${data.system_fallbacks.join(', ')}`;
+        }
+        
+        setMessages(prev => [...prev, { role: "assistant", content: responseContent }]);
       }
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong with RAG query." }]);

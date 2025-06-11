@@ -17,7 +17,7 @@ try:
     def get_pii_redactor():
         global _pii_redactor
         if _pii_redactor is None:
-            _pii_redactor = PIIRedactor(use_ner=True, use_llm_fallback=False)
+            _pii_redactor = PIIRedactor()
         return _pii_redactor
     
     def get_encryption_service():

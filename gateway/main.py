@@ -48,6 +48,30 @@ from gateway.log_handler import log_buffer, WebSocketLogHandler
 
 app = FastAPI()
 
+def get_system_fallback_status():
+    """Get current system fallback status for user visibility"""
+    fallbacks = []
+    
+    try:
+        from websearch_pipeline.websearch_components import LLMSummarizerComponent
+        test_component = LLMSummarizerComponent()
+        if test_component.summarizer is None:
+            fallbacks.append("T5 Summarization")
+    except:
+        fallbacks.append("T5 Summarization")
+    
+    if not os.getenv("SEARCHAPI_API_KEY"):
+        fallbacks.append("Web Search (using mock data)")
+    
+    try:
+        from swisper_core.privacy import pii_redactor
+        if pii_redactor.__class__.__name__.startswith("Mock"):
+            fallbacks.append("PII Protection")
+    except:
+        pass
+    
+    return fallbacks
+
 # CORS configuration
 origins = os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
 origins = [origin.strip() for origin in origins]
@@ -78,6 +102,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
+    include_system_status: bool = False
     session_id: str = "default_session"
 
 @app.post("/chat")
@@ -104,7 +129,7 @@ async def chat_endpoint(payload: ChatRequest) -> Dict[str, Any]: # Added return 
     # 2. Forward to Orchestrator
     try:
         # orchestrator_handle is an async function, so it should be awaited.
-        orchestrator_response = await orchestrator_handle(messages=payload.messages, session_id=payload.session_id)
+        orchestrator_response = await orchestrator_handle(messages=[msg.dict() for msg in payload.messages], session_id=payload.session_id)
         logger.info("Orchestrator response for session %s: %s", payload.session_id, orchestrator_response.get('reply'))
     except Exception as e:
         logger.error("Error in orchestrator for session %s: %s", payload.session_id, e, exc_info=True)
@@ -114,7 +139,15 @@ async def chat_endpoint(payload: ChatRequest) -> Dict[str, Any]: # Added return 
         logger.error("Orchestrator returned non-dict response: %s for session %s", orchestrator_response, payload.session_id)
         raise HTTPException(status_code=500, detail="Invalid response format from orchestrator.")
 
-    return orchestrator_response
+    response_data = {
+        "reply": orchestrator_response.get('reply', 'No response from orchestrator'),
+        "session_id": payload.session_id
+    }
+    
+    if payload.include_system_status:
+        response_data["system_fallbacks"] = get_system_fallback_status()
+    
+    return response_data
 
 @app.get("/api/logs")
 async def get_logs(level: str = "INFO", limit: int = 100):
@@ -444,79 +477,7 @@ async def search_chat_history(query: str, session_id: Optional[str] = None) -> D
         logger.error("Error searching chat history: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error searching chat history: {str(e)}") from e
 
-@app.get("/api/privacy/memories/{user_id}")
-async def list_user_memories(user_id: str) -> Dict[str, Any]:
-    """List all stored memories for user (GDPR compliance)"""
-    logger.info("Received request for GET /api/privacy/memories/%s", user_id)
-    try:
-        from contract_engine.memory.milvus_store import milvus_semantic_store
-        from contract_engine.privacy.audit_store import audit_store
-        from datetime import datetime
-        
-        semantic_stats = milvus_semantic_store.get_user_memory_stats(user_id)
-        
-        artifacts = []
-        try:
-            artifacts = audit_store.get_user_artifacts(user_id) if audit_store.s3_client else []
-        except Exception as e:
-            logger.warning(f"Could not retrieve audit artifacts: {e}")
-        
-        return {
-            "user_id": user_id,
-            "semantic_memories": semantic_stats,
-            "audit_artifacts": {
-                "total_artifacts": len(artifacts),
-                "artifacts": artifacts[:10]
-            },
-            "data_retention_policy": "7_years",
-            "last_updated": datetime.utcnow().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error("Error retrieving user memories for %s: %s", user_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error retrieving user memories: {str(e)}") from e
 
-@app.delete("/api/privacy/memories/{user_id}")
-async def delete_user_memories(user_id: str, confirm_deletion: bool = False) -> Dict[str, Any]:
-    """Delete all memories for user (GDPR right to be forgotten)"""
-    logger.info("Received request for DELETE /api/privacy/memories/%s", user_id)
-    
-    if not confirm_deletion:
-        raise HTTPException(status_code=400, detail="Must confirm deletion with confirm_deletion=true")
-    
-    try:
-        from contract_engine.memory.milvus_store import milvus_semantic_store
-        from contract_engine.privacy.audit_store import audit_store
-        from contract_engine.memory.memory_manager import memory_manager
-        from datetime import datetime
-        
-        semantic_deleted = milvus_semantic_store.delete_user_memories(user_id)
-        
-        artifacts_deleted = False
-        try:
-            artifacts_deleted = audit_store.delete_user_artifacts(user_id) if audit_store.s3_client else True
-        except Exception as e:
-            logger.warning(f"Could not delete audit artifacts: {e}")
-        
-        sessions_cleared = 0
-        try:
-            memory_manager.clear_session_memory(user_id)
-            sessions_cleared = 1
-        except:
-            pass
-        
-        return {
-            "user_id": user_id,
-            "deletion_completed": True,
-            "semantic_memories_deleted": semantic_deleted,
-            "audit_artifacts_deleted": artifacts_deleted,
-            "active_sessions_cleared": sessions_cleared,
-            "deletion_timestamp": datetime.utcnow().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error("Error deleting user memories for %s: %s", user_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error deleting user memories: {str(e)}") from e
 
 @app.post("/api/test/t5-websearch")
 async def test_t5_websearch() -> Dict[str, Any]:
@@ -540,7 +501,7 @@ async def test_t5_websearch() -> Dict[str, Any]:
             }
         ]
         
-        result, _ = summarizer.run(ranked_results=test_results, query="test T5 functionality")
+        result, _ = summarizer.run(content_enriched_results=test_results, query="test T5 functionality")
         
         return {
             "test_type": "t5_websearch",
@@ -629,6 +590,21 @@ async def get_contracts():
         logger.error("Error loading contracts: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error loading contracts: {str(e)}")
 
+def _check_t5_available():
+    try:
+        from websearch_pipeline.websearch_components import LLMSummarizerComponent
+        test_component = LLMSummarizerComponent()
+        return "Available with fallback" if test_component.summarizer is not None else "Fallback mode only"
+    except:
+        return "Fallback mode only"
+
+def _check_privacy_services():
+    try:
+        from swisper_core.privacy import pii_redactor
+        return "Available" if not pii_redactor.__class__.__name__.startswith("Mock") else "Mock services"
+    except:
+        return "Mock services"
+
 @app.get("/system/status")
 async def get_system_status():
     logger.info("Received request for GET /system/status")
@@ -642,9 +618,11 @@ async def get_system_status():
             },
             "system_status": {
                 "rag_available": False,
-                "t5_model_status": "Available with fallback",
+                "t5_model_status": _check_t5_available(),
                 "database_status": "Shelve (fallback mode)",
-                "mcp_server_status": "Running"
+                "mcp_server_status": "Running",
+                "searchapi_status": "Available" if os.getenv("SEARCHAPI_API_KEY") else "Mock data fallback",
+                "privacy_services": _check_privacy_services()
             },
             "performance_settings": {
                 "gpu_acceleration": os.getenv("USE_GPU", "false").lower() == "true",
@@ -703,36 +681,7 @@ async def update_volatility_settings(settings: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Error updating volatility settings: {str(e)}")
 
 
-@app.get("/volatility-settings")
-async def get_volatility_settings():
-    """Get volatility keyword settings"""
-    logger.info("Received request for GET /volatility-settings")
-    try:
-        from orchestrator.volatility_classifier import get_volatility_settings
-        settings = get_volatility_settings()
-        return {"volatility_settings": settings}
-    except Exception as e:
-        logger.error("Error getting volatility settings: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error getting volatility settings: {str(e)}")
 
-
-@app.post("/volatility-settings")
-async def update_volatility_settings(settings: Dict[str, Any]):
-    """Update volatility keyword settings"""
-    logger.info("Received request for POST /volatility-settings")
-    try:
-        required_keys = ["volatile_keywords", "semi_static_keywords", "static_keywords"]
-        for key in required_keys:
-            if key not in settings:
-                raise HTTPException(status_code=400, detail=f"Missing required key: {key}")
-            if not isinstance(settings[key], list):
-                raise HTTPException(status_code=400, detail=f"Key {key} must be a list")
-
-        logger.info("Volatility settings validation passed")
-        return {"status": "success", "message": "Settings updated successfully"}
-    except Exception as e:
-        logger.error("Error updating volatility settings: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error updating volatility settings: {str(e)}")
 
 
 if __name__ == "__main__":

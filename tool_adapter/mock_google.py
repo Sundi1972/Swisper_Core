@@ -113,7 +113,11 @@ def google_shopping_search(q: str, **kwargs) -> List[Dict[str, Any]]:
         return real_google_shopping(q, **kwargs)
     else:
         logger.warning("⚠️ Using mock data - SEARCHAPI_API_KEY not configured", extra={"query": q})
-        return mock_google_shopping(q, **kwargs)
+        results = mock_google_shopping(q, **kwargs)
+        for result in results:
+            if isinstance(result, dict) and "name" in result:
+                result["name"] = f"[Mock Data] {result['name']}"
+        return results
 
 def mock_google_shopping_adapter(q: str) -> List[Dict[str, Any]]:
     return mock_google_shopping(q=q)
