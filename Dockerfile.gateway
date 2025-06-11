@@ -1,10 +1,22 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 WORKDIR /app
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Poetry
+RUN pip install --no-cache-dir poetry
+
+# Configure Poetry: Don't create virtual environment (we're in a container)
+RUN poetry config virtualenvs.create false
+
+# Copy Poetry configuration files
+COPY pyproject.toml poetry.lock* ./
+
+# Install dependencies using Poetry
+RUN poetry install --no-dev --no-interaction --no-ansi
 
 # Download spaCy language model for NER functionality
 RUN python -m spacy download en_core_web_sm
 
+# Copy application code
 COPY . .
+
 CMD ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
