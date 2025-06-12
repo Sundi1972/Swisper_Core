@@ -270,16 +270,21 @@ class LLMSummarizerComponent(BaseComponent):
             
             use_gpu = os.getenv("USE_GPU", "false").lower() == "true"
             
-            self.summarizer = TransformersSummarizer(
-                model_name_or_path="t5-small",
-                use_gpu=use_gpu,
+            from transformers import pipeline
+            self.summarizer = pipeline(
+                "summarization", 
+                model="t5-small", 
+                device=-1 if not use_gpu else 0,  # CPU or GPU
                 max_length=400,
-                min_length=100
+                min_length=100,
+                do_sample=False,
+                num_beams=2,
+                early_stopping=True
             )
             
-            from haystack.schema import Document
-            test_doc = Document(content="Test initialization")
-            self.summarizer.predict(documents=[test_doc])
+            test_result = self.summarizer("Test initialization content for T5 summarizer.")
+            if not test_result or len(test_result) == 0:
+                raise Exception("T5 pipeline test failed")
             
             logger.info(f"T5 summarizer initialized successfully (GPU: {use_gpu})")
             self.fallback_mode = False
@@ -349,14 +354,18 @@ class LLMSummarizerComponent(BaseComponent):
             if not combined_text.strip():
                 return "No content available for summarization."
             
-            from haystack.schema import Document
             try:
-                summary_result = self.summarizer.predict(
-                    documents=[Document(content=combined_text)]
+                summary_result = self.summarizer(
+                    combined_text,
+                    max_length=400,
+                    min_length=100,
+                    do_sample=False,
+                    num_beams=2,
+                    early_stopping=True
                 )
                 
                 if summary_result and len(summary_result) > 0:
-                    summary = summary_result[0].answer if hasattr(summary_result[0], 'answer') else str(summary_result[0])
+                    summary = summary_result[0]['summary_text']
                     return f"[T5 Summary] {summary}"
                 else:
                     logger.warning("T5 summarizer returned empty result, falling back to simple summary")

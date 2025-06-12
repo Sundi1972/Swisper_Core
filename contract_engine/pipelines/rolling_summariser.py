@@ -1,5 +1,6 @@
 from haystack.pipelines import Pipeline
-from haystack.nodes import TransformersSummarizer, PreProcessor
+from haystack.nodes import PreProcessor
+from transformers import pipeline as transformers_pipeline
 from typing import List, Dict, Any
 import os
 from swisper_core import get_logger
@@ -11,24 +12,68 @@ def create_rolling_summariser_pipeline() -> Pipeline:
     pipeline = Pipeline()
     
     preprocessor = PreProcessor(
-        split_by='sentence',
-        split_length=10,
-        split_overlap=2,
-        max_seq_len=512,
+        split_by='word',
+        split_length=100,
+        split_overlap=20,
         split_respect_sentence_boundary=True
     )
     
     use_gpu = os.getenv("USE_GPU", "false").lower() == "true"
     
-    summarizer = TransformersSummarizer(
-        model_name_or_path='t5-small',
-        use_gpu=use_gpu,
+    t5_pipeline = transformers_pipeline(
+        "summarization",
+        model="t5-small", 
+        device=-1 if not use_gpu else 0,  # CPU or GPU
         max_length=150,
         min_length=30,
         do_sample=False,
         num_beams=2,
         early_stopping=True
     )
+    
+    from haystack.nodes.base import BaseComponent
+    
+    class DirectT5Summarizer(BaseComponent):
+        outgoing_edges = 1
+        
+        def __init__(self, t5_pipeline):
+            super().__init__()
+            self.t5_pipeline = t5_pipeline
+            
+        def run(self, documents):
+            if not documents:
+                return {"documents": []}, "output_1"
+            
+            combined_text = "\n\n".join([doc.content for doc in documents if doc.content])
+            
+            if not combined_text.strip():
+                return {"documents": []}, "output_1"
+            
+            summary_result = self.t5_pipeline(
+                combined_text,
+                max_length=150,
+                min_length=30,
+                do_sample=False,
+                num_beams=2,
+                early_stopping=True
+            )
+            
+            if summary_result and len(summary_result) > 0:
+                from haystack.schema import Document
+                summary_doc = Document(content=summary_result[0]['summary_text'])
+                return {"documents": [summary_doc]}, "output_1"
+            else:
+                return {"documents": []}, "output_1"
+        
+        def run_batch(self, documents_batch):
+            """Process batch of document lists"""
+            results = []
+            for documents in documents_batch:
+                result, _ = self.run(documents)
+                results.append(result)
+            return {"documents_batch": results}, "output_1"
+    
+    summarizer = DirectT5Summarizer(t5_pipeline)
     
     pipeline.add_node(component=preprocessor, name="TextSplitter", inputs=["Query"])
     pipeline.add_node(component=summarizer, name="Summarizer", inputs=["TextSplitter"])
@@ -55,7 +100,9 @@ def summarize_messages(messages: List[Dict[str, Any]]) -> str:
         logger.info(f"Applied PII redaction before T5 summarization")
         
         pipeline = create_rolling_summariser_pipeline()
-        result = pipeline.run(query=redacted_content)
+        from haystack.schema import Document
+        documents = [Document(content=redacted_content)]
+        result = pipeline.run(documents=documents)
         
         if "Summarizer" in result and result["Summarizer"]:
             summary_output = result["Summarizer"][0]

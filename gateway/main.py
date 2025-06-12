@@ -594,7 +594,12 @@ def _check_t5_available():
     try:
         from websearch_pipeline.websearch_components import LLMSummarizerComponent
         test_component = LLMSummarizerComponent()
-        return "Available with fallback" if test_component.summarizer is not None else "Fallback mode only"
+        if test_component.summarizer is not None and not test_component.fallback_mode:
+            return "Available"
+        elif test_component.summarizer is not None:
+            return "Available with fallback"
+        else:
+            return "Fallback mode only"
     except:
         return "Fallback mode only"
 
