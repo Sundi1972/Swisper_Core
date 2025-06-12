@@ -16,6 +16,7 @@ interface SidebarProps {
   onSessionSelect?: (sessionId: string) => void;
   currentSessionId?: string;
   isCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -23,6 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSessionSelect = () => {},
   currentSessionId = '',
   isCollapsed = false,
+  onToggleSidebar = () => {},
 }) => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(false);
@@ -87,18 +89,30 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   if (isCollapsed) {
     return (
-      <aside className="w-16 bg-[#141923] rounded-2xl p-2 h-full">
+      <aside className="w-16 bg-[#141923] rounded-2xl p-2 h-full relative">
         <div className="flex flex-col items-center space-y-4">
           <div className="w-8 h-8 bg-[#00a9dd] rounded-lg flex items-center justify-center">
             <span className="text-white text-sm">S</span>
           </div>
         </div>
+        <button
+          onClick={onToggleSidebar}
+          className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-1/2 w-6 h-6 bg-[#8f99ad] hover:bg-[#b6c2d1] rounded-full flex items-center justify-center text-white text-xs font-bold transition-colors"
+        >
+          &gt;
+        </button>
       </aside>
     );
   }
 
   return (
-    <aside className="w-[267px] bg-[#141923] rounded-2xl p-8 h-full overflow-y-auto">
+    <aside className="w-[267px] bg-[#141923] rounded-2xl p-8 h-full overflow-y-auto relative">
+      <button
+        onClick={onToggleSidebar}
+        className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-1/2 w-6 h-6 bg-[#8f99ad] hover:bg-[#b6c2d1] rounded-full flex items-center justify-center text-white text-xs font-bold transition-colors"
+      >
+        &lt;
+      </button>
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-[#f9fbfc] text-sm font-normal uppercase tracking-wide">CHATS</h2>

@@ -107,14 +107,13 @@ function App() {
       />
       
       <div className="flex h-[calc(100vh-80px)] p-6 gap-6">
-        {!sidebarCollapsed && (
-          <Sidebar 
-            onSectionSelect={handleSectionSelect}
-            onSessionSelect={handleSessionSelect}
-            currentSessionId={currentSessionId}
-            isCollapsed={sidebarCollapsed}
-          />
-        )}
+        <Sidebar 
+          onSectionSelect={handleSectionSelect}
+          onSessionSelect={handleSessionSelect}
+          currentSessionId={currentSessionId}
+          isCollapsed={sidebarCollapsed}
+          onToggleSidebar={handleToggleSidebar}
+        />
         
         <main className={`flex-1 bg-[#141923] rounded-2xl p-6 flex flex-col ${isFullWidth ? 'max-w-none' : 'max-w-6xl mx-auto'}`}>
           <TabBar 
